@@ -1,0 +1,8 @@
+.navigation a.active {
+    color:antiquewhite;
+    background-color: cornflowerblue;
+}
+
+/* .navigation a.hover {
+    color: brown;
+} */
