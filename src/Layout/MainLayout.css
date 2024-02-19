@@ -1,8 +1,21 @@
-.navigation a.active {
-    color:antiquewhite;
-    background-color: cornflowerblue;
+.NavLink {
+    display: flex;
+    flex-direction: column;
+    padding: 10px;
+}
+.NavLink a.active {
+    background-color: lightblue;
 }
 
-/* .navigation a.hover {
-    color: brown;
-} */
+.navi {
+    margin-top: 5px;
+    border-radius: 10px;
+    height: 50px;
+    display: flex;
+    align-items: center;
+    padding-left: 20px;
+}
+
+.navi:hover {
+    background-color: lightblue;
+}

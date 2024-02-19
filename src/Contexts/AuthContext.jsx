@@ -1,5 +1,7 @@
 import React, { useEffect, useState, useContext } from "react";
-import { auth } from "../firebase";
+import { auth, db } from "../firebase";
+import { doc, getDoc } from "firebase/firestore";
+
 import {
   BrowserRouter as Router,
   Routes,
@@ -20,15 +22,36 @@ export function useAuth() {
 
 export function AuthProvider(props) {
   const [authUser, setAuthUser] = useState(null);
+  const [user, setUser] = useState(null);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [role, setRole] = useState(null);
 
+
   useEffect(() => {
-    const unsubscribe = auth.onAuthStateChanged((user) => {
+    const unsubscribe = auth.onAuthStateChanged(async (user) => {
       if (user) {
+        const docRef = doc(
+          db,
+          "users",
+          user.uid
+        );
+        const docSnap = await getDoc(docRef);
+        if (docSnap.exists()) {
+          setUser(docSnap.data());
+          setRole(docSnap.data().role);
+        } else {
+          const docRef = doc(db, "thirdparty", user.uid);
+          const docSnap = await getDoc(docRef);
+          if (docSnap.exists()) {
+            setUser(docSnap.data());
+            setRole(docSnap.data().role);
+          } else {
+            return "No such document";
+          }
+        }
+
         setAuthUser(user);
         setIsLoggedIn(true);
-        setRole("admin");
       } else {
         setAuthUser(null);
         setIsLoggedIn(false);
@@ -46,6 +69,8 @@ export function AuthProvider(props) {
     setIsLoggedIn,
     role,
     setRole,
+    user,
+    setUser,
   };
 
   return (

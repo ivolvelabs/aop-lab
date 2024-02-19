@@ -1,13 +1,20 @@
-
-
 import React from "react";
-import { BrowserRouter, Routes, Route, Outlet, RouterProvider, createRoutesFromElements, createBrowserRouter, Navigate } from 'react-router-dom';
+import {
+  BrowserRouter,
+  Routes,
+  Route,
+  Outlet,
+  RouterProvider,
+  createRoutesFromElements,
+  createBrowserRouter,
+  Navigate,
+} from "react-router-dom";
 
 import { AuthProvider, useAuth } from "./Contexts/AuthContext"; // Import your AuthContext
 import MainLayout from "./Layout/MainLayout"; // Import your MainLayout component
 import Login from "./Auth/Login";
 import HomePage from "./Home/HomePage";
-import "./App.css"
+import "./App.css";
 import Bookings from "./Bookings/Bookings";
 import NotFound from "./NotFound";
 import RootLayout from "./Layout/RootLayout";
@@ -16,55 +23,62 @@ import UsersAndPermissions from "./UsersAndPermissions/UsersAndPermissions";
 import ThirdParty from "./ThirdParty/ThirdParty";
 import RequireAuth from "./Auth/RequireAuth";
 
-
 const App = () => {
-  const { isLoggedIn } = useAuth();
+  const { isLoggedIn, role, authUser } = useAuth();
 
-// const router = createBrowserRouter(
-//   createRoutesFromElements(
-//     <Route>
-//       <Route
-//           path="/"
-//           element={isLoggedIn ? <MainLayout /> : <Login />}
-//         />
-
-//         <Route element={isLoggedIn ? <MainLayout /> : <Login />}>
-//           <Route path="/bookings" element={<Bookings />} />
-//           <Route path="/home" element={<HomePage />} />
-//           <Route path="/masters" element={<Masters />} />
-//           {/* <ProtectedRoute path="/users" element={<Users />} allowedRoles={['admin']} />
-//           <ProtectedRoute path="/permissions" element={<Permissions />} allowedRoles={['admin']} />
-//           <ProtectedRoute path="/masters" element={<Masters />} allowedRoles={['admin', 'technician']} />
-//           <ProtectedRoute path="/thirdparty" element={<Thirdparty />} allowedRoles={['technician']} /> */}
-//         </Route>
-//       {/* <Route path="/" element={isLoggedIn ? <Navigate to={<HomePage />} /> : <Navigate to={<Login />} /> } /> */}
-//     </Route>
-//   )
-// ) 
+  const mainNavs = [
+    {
+      path: "/",
+      name: "Home",
+      roles: ["admin", "technician", "receptionist", "thirdparty"],
+      component: <HomePage />,
+    },
+    {
+      path: "bookings",
+      name: "Bookings",
+      roles: ["admin", "technician", "receptionist", "thirdparty"],
+      component: <Bookings />,
+    },
+    {
+      path: "masters",
+      name: "Masters",
+      roles: ["admin", "technician", "receptionist"],
+      component: <Masters />,
+    },
+    {
+      path: "thirdparty",
+      name: "Third Party",
+      roles: ["admin", "receptionist"],
+      component: <ThirdParty />,
+    },
+    {
+      path: "usersandpermissions",
+      name: "Users and Permissions",
+      roles: ["admin"],
+      component: <UsersAndPermissions />,
+    },
+  ];
 
   return (
-    // <RouterProvider router={router} />
-    // <div>
-      <Routes>
-        <Route>
-           {/* public routes */}
-          <Route path="login" element={isLoggedIn ? <Navigate to='/'/> : <Login />} />
-          
-          
-          {/* Private routes */}
-          <Route element={<RequireAuth />}>
-            <Route path="/" element={<HomePage />} />
-            <Route path="bookings" element={<Bookings />} />
-            <Route path="masters" element={<Masters />} />
-            <Route path="usersandpermissions" element={<UsersAndPermissions />} />
-            <Route path="thirdparty" element={<ThirdParty />} />
+    <Routes>
+      <Route
+        path="login"
+        element={isLoggedIn ? <Navigate to="/" /> : <Login />}
+      />
+      {/* <Route path="*" element={<NotFound />} /> */}
+      <Route path="*" element={<Navigate to="/" />} />
+      <Route>
+        <Route element={<RequireAuth />}>
+          <Route path="/" element={<HomePage />} />
+          {mainNavs
+            .filter((nav) => role && nav.roles.includes(role))
+            .map((nav, index) => {
+              return <Route path={nav.path} element={nav.component} />;
+            })}
         </Route>
-
-        <Route path="*" element={<NotFound />} />
-        </Route>
-      </Routes>
-    // </div>
+      </Route>
+    </Routes>
   );
-}
+};
 
 export default App;

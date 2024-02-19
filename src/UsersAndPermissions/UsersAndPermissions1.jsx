@@ -27,11 +27,9 @@ import {
   RadioGroup,
   FormControlLabel,
   Radio,
-  InputAdornment,
 } from "@mui/material";
 import UserTable from "./UserTable";
 import { getFunctions, httpsCallable } from "firebase/functions";
-import { AccountCircle, Search } from "@mui/icons-material";
 
 const UsersAndPermissions = () => {
   const functions = getFunctions();
@@ -83,7 +81,7 @@ const UsersAndPermissions = () => {
           console.error("Error creating user:", error);
         });
 
-        setUsers((prevUsers) => [...prevUsers, { fullName, email, role }]); // Update table
+      setUsers((prevUsers) => [...prevUsers, { fullName, email, role }]); // Update table
       handleCloseAddUserDialog();
     } catch (error) {
       console.error(error);
@@ -95,80 +93,17 @@ const UsersAndPermissions = () => {
     setRole(event.target.value);
   };
 
-
-const [searchTerm, setSearchTerm] = useState("");
-const [filteredUsers, setFilteredUsers] = useState(users);
-
-const handleSearch = (event) => {
-  setSearchTerm(event.target.value.toLowerCase());
-};
-
-const filterUsers = () => {
-  const filteredData = users.filter((user) => {
-    const fullName = user.fullName.toLowerCase();
-    const email = user.email.toLowerCase();
-    return fullName.includes(searchTerm) || email.includes(searchTerm);
-  });
-  setFilteredUsers(filteredData);
-};
-
-useEffect(() => {
-  filterUsers();
-}, [searchTerm, users]);
-
-
   return (
     <div>
-      {/* <div
+      <div
         style={{
           width: "100%",
           display: "flex",
           flexDirection: "row",
           alignItems: "center",
         }}
-      > */}
-      <div
-        style={{
-          display: "flex",
-          flexDirection: "row",
-          justifyContent: "center",
-          alignItems: "center",
-          marginBottom: "20px",
-        }}
       >
-        <div
-          style={{
-            display: "flex",
-            flex: 1,
-            alignItems: "center",
-            justifyContent: "center",
-          }}
-        >
-          <TextField
-            value={searchTerm}
-            onChange={handleSearch}
-            label="Search"
-            type="search"
-            fullWidth
-            size="small"
-            InputProps={{
-              startAdornment: (
-                <InputAdornment position="start">
-                  <Search />
-                </InputAdornment>
-              ),
-            }}
-            // sx={{ mb: 2 }}
-          />
-        </div>
-        <div
-          style={{
-            display: "flex",
-            flex: 1,
-            alignItems: "center",
-            justifyContent: "end",
-          }}
-        >
+        <div style={{ display: "flex", flex: "1", justifyContent: "end" }}>
           <Button
             type="submit"
             variant="contained"
@@ -179,14 +114,6 @@ useEffect(() => {
             {loading ? <CircularProgress size={24} /> : "Add User"}
           </Button>
         </div>
-      </div>
-      {/* </div> */}
-      <div>
-        {!usersLoading ? (
-          <UserTable users={filteredUsers} />
-        ) : (
-          <CircularProgress size={54} />
-        )}
       </div>
 
       <Dialog open={addUserDialogOpen} onClose={handleCloseAddUserDialog}>
@@ -258,6 +185,14 @@ useEffect(() => {
           </Button>
         </DialogActions>
       </Dialog>
+
+      <div>
+        {!usersLoading ? (
+          <UserTable users={users} />
+        ) : (
+          <CircularProgress size={54} />
+        )}
+      </div>
     </div>
   );
 };

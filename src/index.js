@@ -9,12 +9,22 @@ import { AuthProvider } from './Contexts/AuthContext';
 
 const theme = createTheme({
   typography: {
-    fontFamily: [
-      
-      "Poppins",
-      "sans-serif",
-  
-    ].join(","),
+    fontFamily: ["Poppins", "sans-serif"].join(","),
+  },
+  palette: {
+    primary: {
+      main: "#0066cb",
+    },
+    secondary: {
+      main: "#00cbcb",
+    },
+    text: {
+      main: "#98cbff",
+    },
+    bgColor: {
+      // main: "#e3f2fd",
+      main: "#eeeeee",
+    },
   },
 });
 
@@ -27,7 +37,7 @@ root.render(
     <AuthProvider>
       <ThemeProvider theme={theme}>
         <Routes>
-          <Route path='/*' element={<App />} />
+          <Route path='/*' element={<App theme={theme} />} />
         </Routes>
       </ThemeProvider>
     </AuthProvider>
