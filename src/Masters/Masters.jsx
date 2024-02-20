@@ -26,7 +26,6 @@ const Masters = () => {
       </Tabs>
       <Box>
         {tabs[activeTab].component}{" "}
-        {/* Only render the active tab's component */}
       </Box>
     </div>
   );

@@ -22,6 +22,8 @@ import Masters from "./Masters/Masters";
 import UsersAndPermissions from "./UsersAndPermissions/UsersAndPermissions";
 import ThirdParty from "./ThirdParty/ThirdParty";
 import RequireAuth from "./Auth/RequireAuth";
+import SingleBooking from "./Bookings/SingleBooking";
+import Templates from "./Templates/Templates";
 
 const App = () => {
   const { isLoggedIn, role, authUser } = useAuth();
@@ -37,13 +39,13 @@ const App = () => {
       path: "bookings",
       name: "Bookings",
       roles: ["admin", "technician", "receptionist", "thirdparty"],
+      // element: (
+      //   <Outlet>
+      //     <Route path="" element={<Bookings />} />
+      //     <Route path=":bookingId" element={<SingleBooking />} />
+      //   </Outlet>
+      // ),
       component: <Bookings />,
-    },
-    {
-      path: "masters",
-      name: "Masters",
-      roles: ["admin", "technician", "receptionist"],
-      component: <Masters />,
     },
     {
       path: "thirdparty",
@@ -52,10 +54,22 @@ const App = () => {
       component: <ThirdParty />,
     },
     {
+      path: "masters",
+      name: "Masters",
+      roles: ["admin", "technician", "receptionist"],
+      component: <Masters />,
+    },
+    {
       path: "usersandpermissions",
       name: "Users and Permissions",
       roles: ["admin"],
       component: <UsersAndPermissions />,
+    },
+    {
+      path: "templates",
+      name: "Templates",
+      roles: ["admin", "technician", "receptionist"],
+      component: <Templates />,
     },
   ];
 
@@ -70,6 +84,7 @@ const App = () => {
       <Route>
         <Route element={<RequireAuth />}>
           <Route path="/" element={<HomePage />} />
+          <Route path="bookings/:bookingId" element={<SingleBooking />} />
           {mainNavs
             .filter((nav) => role && nav.roles.includes(role))
             .map((nav, index) => {

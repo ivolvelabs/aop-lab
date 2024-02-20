@@ -21,23 +21,28 @@ import {
   createRoutesFromElements,
   createBrowserRouter,
   Navigate,
-  useNavigate,
 } from "react-router-dom";
 
 const BookingsTable = ({ bookings, isCurrent }) => {
-  const theme = useTheme();
-const navigate = useNavigate();
+    const theme = useTheme();
 
-  const StyledTableCell = styled(TableCell)(({ theme }) => ({
-    [`&.${tableCellClasses.head}`]: {
-      color: "white",
-    },
-  }));
-  // const StyledTableRow = styled(TableRow)(({ theme }) => ({
-  //   [`&.${tableCellClasses.head}`]: {
-  //     color: "white",
-  //   },
-  // }));
+    const handleSingleBookingNav =(event, id) => {
+      console.log(id);
+        <Navigate to={`bookings/${id}`} />;
+    }
+
+  // Implement logic to filter and display bookings based on isCurrent
+
+  // Example assuming simple filtering:
+  // const filteredBookings = isCurrent
+  //   ? bookings.filter((booking) => !booking.isCompleted)
+  //   : bookings.filter((booking) => booking.isCompleted);
+
+const StyledTableCell = styled(TableCell)(({ theme }) => ({
+  [`&.${tableCellClasses.head}`]: {
+    color: "white",
+  },
+}));
 
   return (
     <div>
@@ -67,17 +72,9 @@ const navigate = useNavigate();
             <TableBody>
               {bookings.map((booking) => (
                 <TableRow
-                  sx={{
-                    cursor: "pointer",
-                    // "&.MuiTableRow-hover": {
-                    //   background: theme.palette.secondary.main,
-                    // },
-                    "&.MuiTableRow-root:hover": {
-                      background: theme.palette.text.main,
-                    },
-                  }}
+                  key={booking.id}
                   hover
-                  onClick={() => navigate(`/bookings/${booking.id}`)}
+                  onClick={(event) => handleSingleBookingNav(event, booking.id)}
                 >
                   {/* Extract and display data from each booking object */}
                   <TableCell>{booking.patientName}</TableCell>

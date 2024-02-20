@@ -17,7 +17,7 @@ import { useNavigate, Outlet, NavLink } from "react-router-dom";
 import "./MainLayout.css";
 import { useAuth } from "../Contexts/AuthContext"; // Import your AuthContext
 import { auth } from "../firebase";
-import { Home, LocalHospital, Logout, LogoutOutlined, PeopleAlt, Widgets } from "@mui/icons-material";
+import { Feed, Home, LocalHospital, Logout, LogoutOutlined, PeopleAlt, Widgets } from "@mui/icons-material";
 import Header from "./Header";
 
 function MainLayout( ) {
@@ -58,24 +58,31 @@ function MainLayout( ) {
       roles: ["admin", "technician", "receptionist", "thirdparty"],
     },
     {
-      link: "masters",
-      name: "Masters",
-      icon: <Widgets />,
-      index: 2,
-      roles: ["admin", "technician", "receptionist"],
-    },
-    {
       link: "thirdparty",
       name: "Third Party",
       icon: <LocalHospital />,
-      index: 3,
+      index: 2,
       roles: ["admin"],
+    },
+    {
+      link: "masters",
+      name: "Masters",
+      icon: <Widgets />,
+      index: 3,
+      roles: ["admin", "technician", "receptionist"],
     },
     {
       link: "usersandpermissions",
       name: "Users and Permissions",
       icon: <PeopleAlt />,
       index: 4,
+      roles: ["admin"],
+    },
+    {
+      link: "templates",
+      name: "Templates",
+      icon: <Feed />,
+      index: 5,
       roles: ["admin"],
     },
   ];

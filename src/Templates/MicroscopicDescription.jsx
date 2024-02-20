@@ -22,29 +22,36 @@ import {
   orderBy,
   query,
 } from "firebase/firestore";
-import { db } from "../../firebase"; // Assuming your Firestore instance is imported here
+import { db } from "../firebase"; // Assuming your Firestore instance is imported here
 import { Search } from "@mui/icons-material";
 import { useTheme } from "@emotion/react";
 
-const Category = () => {
-  const [categories, setCategories] = useState([]);
+const MicroscopicDescriptionTemplates = () => {
+  const [templates, setTemplates] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [addCategoryDialogOpen, setAddCategoryDialogOpen] = useState(false);
+  const [addTemplateDialogOpen, setAddTemplateDialogOpen] = useState(false);
   const [name, setName] = useState("");
+  const [description, setDescription] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
 
   const theme = useTheme();
 
   useEffect(() => {
-    const q = query(collection(db, "categories"), orderBy("createdAt", "desc"));
+    const q = query(
+      collection(db, "microscopicDescriptionTemplates"),
+      orderBy("createdAt", "desc")
+    );
 
     const unsubscribe = onSnapshot(q, (querySnapshot) => {
-      const filteredCategories = querySnapshot.docs.filter((doc) => {
+      const filteredTemplates = querySnapshot.docs.filter((doc) => {
         const data = doc.data();
-        return data.name.toLowerCase().includes(searchTerm.toLowerCase());
+        return [data.name, data.description]
+          .join(" ")
+          .toLowerCase()
+          .includes(searchTerm.toLowerCase());
       });
-      setCategories(
-        filteredCategories.map((doc) => ({ ...doc.data(), id: doc.id }))
+      setTemplates(
+        filteredTemplates.map((doc) => ({ ...doc.data(), id: doc.id }))
       );
 
       setLoading(false);
@@ -57,36 +64,31 @@ const Category = () => {
     setSearchTerm(event.target.value.toLowerCase());
   };
 
-  const handleOpenAddCategoryDialog = () => {
-    setAddCategoryDialogOpen(true);
+  const handleOpenAddTemplateDialog = () => {
+    setAddTemplateDialogOpen(true);
   };
 
-  const handleCloseAddCategoryDialog = () => {
-    setAddCategoryDialogOpen(false);
+  const handleCloseAddTemplateDialog = () => {
+    setAddTemplateDialogOpen(false);
     setName("");
+    setDescription("");
   };
 
-  const handleSaveCategory = async () => {
+  const handleSaveTemplate = async () => {
     try {
       setLoading(true);
-      const categoryData = {
+      const templateData = {
         name,
+        description,
         createdAt: serverTimestamp(),
       };
-      await addDoc(collection(db, "categories"), categoryData);
-      const q = query(
-        collection(db, "categories"),
-        orderBy("createdAt", "desc")
+      await addDoc(
+        collection(db, "microscopicDescriptionTemplates"),
+        templateData
       );
-      const unsubscribe = onSnapshot(q, (querySnapshot) => {
-        setCategories(
-          querySnapshot.docs.map((doc) => ({ ...doc.data(), id: doc.id }))
-        );
-        handleCloseAddCategoryDialog();
-      });
-      return () => unsubscribe();
+      handleCloseAddTemplateDialog();
     } catch (error) {
-      console.error("Error adding category:", error);
+      console.error("Error adding template:", error);
     } finally {
       setLoading(false);
     }
@@ -140,18 +142,18 @@ const Category = () => {
             variant="contained"
             color="primary"
             disabled={loading}
-            onClick={handleOpenAddCategoryDialog}
+            onClick={handleOpenAddTemplateDialog}
           >
-            {loading ? <CircularProgress size={24} /> : "Add Category"}
+            {loading ? <CircularProgress size={24} /> : "Add Template"}
           </Button>
         </div>
       </div>
 
       <Dialog
-        open={addCategoryDialogOpen}
-        onClose={handleCloseAddCategoryDialog}
+        open={addTemplateDialogOpen}
+        onClose={handleCloseAddTemplateDialog}
       >
-        <DialogTitle>Add Category</DialogTitle>
+        <DialogTitle>Add Microscopic Description Template</DialogTitle>
         <DialogContent>
           <TextField
             error={name === ""}
@@ -161,20 +163,32 @@ const Category = () => {
             onChange={(e) => setName(e.target.value)}
             fullWidth
           />
+          <TextField
+            error={description === ""}
+            multiline
+            minRows={4}
+            label="Description"
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            fullWidth
+          />
         </DialogContent>
         <DialogActions>
-          <Button onClick={handleCloseAddCategoryDialog}>Cancel</Button>
-          <Button disabled={name.trim() === ""} onClick={handleSaveCategory}>
+          <Button onClick={handleCloseAddTemplateDialog}>Cancel</Button>
+          <Button
+            disabled={name.trim() === "" || description.trim() === ""}
+            onClick={handleSaveTemplate}
+          >
             {loading ? <CircularProgress size={24} /> : "Save"}
           </Button>
         </DialogActions>
       </Dialog>
 
       <div>
-        {!loading && categories.length > 0 ? (
+        {!loading && templates.length > 0 ? (
           <Grid container spacing={2}>
-            {categories.map((category) => (
-              <Grid item xs={3} key={category.id}>
+            {templates.map((template) => (
+              <Grid item xs={12} key={template.id}>
                 <Card
                   sx={{ borderLeft: `${theme.palette.primary.main} 5px solid` }}
                 >
@@ -186,9 +200,12 @@ const Category = () => {
                       }}
                       variant="h6"
                     >
-                      {category.name}
+                      {template.name}
                     </Typography>
-                    {/* You can add more content to the card based on your category data */}
+                    <Typography variant="body2">
+                      {template.description}
+                    </Typography>
+                    {/* You can add more content to the card based on your template data */}
                   </CardContent>
                 </Card>
               </Grid>
@@ -196,7 +213,7 @@ const Category = () => {
           </Grid>
         ) : (
           <p>
-            {loading ? <CircularProgress size={54} /> : "No categories found."}
+            {loading ? <CircularProgress size={54} /> : "No templates found."}
           </p>
         )}
       </div>
@@ -204,4 +221,4 @@ const Category = () => {
   );
 };
 
-export default Category;
+export default MicroscopicDescriptionTemplates;

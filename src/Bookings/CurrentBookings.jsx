@@ -16,9 +16,12 @@ import {
   InputLabel,
   Select,
   MenuItem,
+  RadioGroup,
+  FormControlLabel,
+  Radio,
 } from "@mui/material";
 import SearchIcon from "@mui/icons-material/Search";
-import { addDoc, collection, getDocs, query, where } from "firebase/firestore";
+import { addDoc, collection, getDocs, orderBy, query, serverTimestamp, where } from "firebase/firestore";
 import { db } from "../firebase"; // Assuming your Firestore instance is imported here
 import BookingsTable from "./BookingsTable";
 import { Search } from "@mui/icons-material";
@@ -26,182 +29,248 @@ import { Search } from "@mui/icons-material";
 const CurrentBookings = () => {
   const [bookings, setBookings] = useState([]);
   const [doctors, setDoctors] = useState([]);
+  const [doctor, setDoctor] = useState("");
   const [hospitals, setHospitals] = useState([]);
-  const [categories, setCategories] = useState([]);
-  const [subcategories, setSubcategories] = useState([]);
+  const [hospital, setHospital] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [isLoading, setIsLoading] = useState(true); // Added loading state
   const [open, setOpen] = useState(false);
   const [newBookingData, setNewBookingData] = useState([]);
+  const [categories, setCategories] = useState([]);
+  const [subcategories, setSubcategories] = useState([]);
   const [itemNames, setItemNames] = useState([]);
-  const [selectedCategoryName, setSelectedCategoryName] = useState("");
-  const [selectedSubcategoryName, setSelectedSubcategoryName] = useState("");
-  const [selectedItemName, setSelectedItemName] = useState("");
+  const [selectedCategory, setSelectedCategory] = useState("");
+  const [selectedSubcategory, setSelectedSubcategory] = useState("");
+  const [selectedItem, setSelectedItem] = useState("");
 
+  const handleClickOpen = () => {
+    setOpen(true);
+  };
 
-const handleClickOpen = () => {
-  setOpen(true);
-};
+  const handleClose = () => {
+    setOpen(false);
+    setDoctor("");
+    setHospital("");
+    setSelectedCategory("");
+    setSelectedSubcategory("");
+    setSelectedItem("");
+    setNewBookingData({
+      patientName: "",
+      age: "",
+      sex: "",
+      referralDoctor: [],
+      phone: "",
+      hospital: [],
+      date: "",
+      clinicalDiagnosis: "",
+      clinicalHistory: "",
+      additionalInfo: [],
+      typeOfSpecimen: {},
+    });
+  };
 
-const handleClose = () => {
-  setOpen(false);
-  setNewBookingData({
-    patientName: "",
-    age: "",
-    sex: "",
-    referralDoctor: "",
-    phone: "",
-    hospital: "",
-    date: "",
-    clinicalDiagnosis: "",
-    clinicalHistory: "",
-    additionalInfo: [],
-    typeOfSpecimen: {},
-  });
-};
+  // Function to handle form changes
+  const handleInputChange = (event) => {
+    setNewBookingData({
+      ...newBookingData,
+      [event.target.name]: event.target.value,
+    });
+  };
 
-// Function to handle form changes
-const handleInputChange = (event) => {
-  setNewBookingData({
-    ...newBookingData,
-    [event.target.name]: event.target.value,
-  });
-};
+  // Function to handle selection changes
+  const handleSelectDoctor = (singleDoctor) => {
+    setDoctor(singleDoctor);
+  };
+  const handleSelectHospital = (singleHospital) => {
+    setHospital(singleHospital);
+  };
 
-// Function to handle selection changes
-const handleSelectChange = (event) => {
-  setNewBookingData({
-    ...newBookingData,
-    [event.target.name]: event.target.value,
-  });
-};
+  const handleChange = (event) => {
+    setNewBookingData({
+      ...newBookingData,
+      sex: event.target.value,
+    });
+  };
 
+  const fetchHospitalsAndDoctors = async () => {
+    try {
+      const hospitalsQuery = query(
+        collection(db, "thirdparty"),
+        where("type", "==", "hospital")
+      );
+      const doctorsQuery = query(
+        collection(db, "thirdparty"),
+        where("type", "==", "doctor")
+      );
 
+      const hospitalsSnapshot = await getDocs(hospitalsQuery);
+      const doctorsSnapshot = await getDocs(doctorsQuery);
 
-const handleCategoryChange = (event) => {
-  setSelectedCategoryName(event.target.value);
-};
-
-const handleSubcategoryChange = (event) => {
-  setSelectedSubcategoryName(event.target.value);
-};
-
-const handleItemNameChange = (event) => {
-  setSelectedItemName(event.target.value);
-};
-
-
-const fetchHospitalsAndDoctors = async () => {
-  try {
-    const hospitalsQuery = query(collection(db, "thirdparty"), where("type", "==", "hospital"));
-    const doctorsQuery = query(collection(db, "thirdparty"), where("type", "==", "doctor"));
-
-    const hospitalsSnapshot = await getDocs(hospitalsQuery);
-    const doctorsSnapshot = await getDocs(doctorsQuery);
-
-    const hospitals = hospitalsSnapshot.docs.map((doc) => ({
-      id: doc.id,
-      ...doc.data(),
-    }));
-    const doctors = doctorsSnapshot.docs.map((doc) => ({
-      id: doc.id,
-      ...doc.data(),
-    }));
-
-    // Set the fetched data to state or use it as needed
-    setHospitals(hospitals);
-    setDoctors(doctors);
-  } catch (error) {
-    console.error("Error fetching hospitals and doctors:", error);
-  }
-};
-
-const fetchCategoriesWithSubcollections = async () => {
-  try {
-    const categoriesQuery = collection(db, "categories");
-    const categoriesSnapshot = await getDocs(categoriesQuery);
-
-    const categories = categoriesSnapshot.docs.map(async(doc) => {
-      const categoryData = doc.data();
-      const subcategoriesRef = collection(doc.ref, "subcategories");
-      const subcategoriesSnapshot = await getDocs(subcategoriesRef);
-
-      const fetchedSubcategories = subcategoriesSnapshot.docs.map((doc) => ({
+      const hospitals = hospitalsSnapshot.docs.map((doc) => ({
         id: doc.id,
         ...doc.data(),
-        itemNames: [],
+      }));
+      const doctors = doctorsSnapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
       }));
 
-      for (const subcategory of fetchedSubcategories) {
-        const itemNamesRef = collection(subcategoriesRef, doc.id, "itemNames");
-        const itemNamesSnapshot = await getDocs(itemNamesRef);
+      // Set the fetched data to state or use it as needed
+      setHospitals(hospitals);
+      setDoctors(doctors);
+    } catch (error) {
+      console.error("Error fetching hospitals and doctors:", error);
+    }
+  };
 
-        subcategory.itemNames = itemNamesSnapshot.docs.map((doc) => ({
+  const handleCategoryChange = (value) => {
+    setSelectedCategory(value);
+    fetchSubcategories(value.id);
+  };
+
+  const handleSubcategoryChange = (value) => {
+    setSelectedSubcategory(value);
+    fetchItemNames(value.id);
+  };
+
+  const handleItemNameChange = (value) => {
+    setSelectedItem(value);
+  };
+
+  const fetchCategories = async () => {
+    try {
+      const categoriesQuery = collection(db, "categories");
+      const categoriesSnapshot = await getDocs(categoriesQuery);
+      setCategories(
+        categoriesSnapshot.docs.map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+        }))
+      );
+    } catch (error) {
+      console.error("Error fetching categories:", error);
+    }
+  };
+
+  const fetchSubcategories = async (id) => {
+    if (id) {
+      try {
+        const subcategoriesRef = collection(
+          db,
+          "categories",
+          id,
+          "subcategories"
+        );
+        const subcategoriesSnapshot = await getDocs(subcategoriesRef);
+        const subcategories = subcategoriesSnapshot.docs.map((doc) => ({
           id: doc.id,
           ...doc.data(),
         }));
+        setSubcategories(subcategories);
+      } catch (error) {
+        console.error("Error fetching subcategories:", error);
+      }
+    }
+  };
+
+  const fetchItemNames = async (id) => {
+    if (id) {
+      try {
+        const itemNamesRef = collection(
+          db,
+          "categories",
+          selectedCategory.id,
+          "subcategories",
+          id,
+          "itemNames"
+        );
+        const itemNamesSnapshot = await getDocs(itemNamesRef);
+        const itemNames = itemNamesSnapshot.docs.map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+        }));
+        setItemNames(itemNames);
+      } catch (error) {
+        console.error("Error fetching item names:", error);
+      }
+    }
+  };
+
+  // Call the fetch functions in your component's effect or when needed
+  useEffect(() => {
+    fetchHospitalsAndDoctors();
+    fetchCategories();
+  }, []);
+
+  const handleAddBooking = async () => {
+    try {
+      setIsLoading(true);
+      // Validate required fields
+      if (!newBookingData.patientName || !newBookingData.date) {
+        throw new Error("Please fill in Patient Name and Date fields.");
       }
 
-      return {
-        id: doc.id,
-        ...categoryData,
-        subcategories: fetchedSubcategories,
+const statesInfo = [
+  {
+    state: "received",
+    stateName: "Received",
+    isDone: true,
+    updatedAt: new Date(), // Assuming you have a serverTimestamp function
+  },
+  {
+    state: "grossed",
+    stateName: "Grossed",
+    isDone: false,
+    updatedAt: null,
+  },
+  {
+    state: "slideDelivered",
+    stateName: "Slide Delivered",
+    isDone: false,
+    updatedAt: null,
+  },
+  {
+    state: "resultEntered",
+    stateName: "Result Entered",
+    isDone: false,
+    updatedAt: null,
+  },
+  {
+    state: "resultAuthorized",
+    stateName: "Result Authorized",
+    isDone: false,
+    updatedAt: null,
+  },
+];
+
+      const bookingData = {
+        ...newBookingData,
+        referralDoctor: doctor,
+        hospital,
+        isCompleted: false,
+        createdAt: serverTimestamp(),
+        statesInfo,
+        typeOfSpecimen: {
+          category: selectedCategory.name,
+          subcategory: selectedSubcategory.name,
+          itemName: selectedItem,
+        },
       };
-    });
 
-    // Update state for both subcategories and itemNames
-    setSubcategories(categories.map((category) => category.subcategories));
-    setItemNames(categories.map((category) => category.subcategories.map((subcategory) => subcategory.itemNames)));
-  } catch (error) {
-    console.error("Error fetching categories with subcollections:", error);
-  }
-};
+      const docRef = await addDoc(collection(db, "bookings"), bookingData);
 
-// Call the fetch functions in your component's effect or when needed
-useEffect(() => {
-  fetchHospitalsAndDoctors();
-  fetchCategoriesWithSubcollections();
-}, []);
+      setBookings((prevBookings) => [bookingData, ...prevBookings]);
 
-// Call the fetch functions in your component's effect or when needed
-useEffect(() => {
-  fetchHospitalsAndDoctors();
-  fetchCategoriesWithSubcollections();
-}, []);
-
-
-const handleAddBooking = async () => {
-  try {
-    // Validate required fields
-    if (!newBookingData.patientName || !newBookingData.date) {
-      throw new Error("Please fill in Patient Name and Date fields.");
+      // Handle success
+      setIsLoading(false);
+      handleClose();
+      console.log("Booking added successfully with ID:", docRef.id);
+    } catch (error) {
+      // Handle errors gracefully
+      console.error("Error adding booking:", error);
+      alert("An error occurred. Please try again later.");
     }
-
-    // Add booking data to Firestore (assuming you have Firebase set up)
-    const docRef = await addDoc(collection(db, "bookings"), {
-      ...newBookingData,
-      isCompleted: false, // Set initial state as "Received"
-      createdAt: new Date().getTime(),
-      state: "received",
-      typeOfSpecimen: {
-        category: selectedCategoryName,
-        subcategory: selectedSubcategoryName,
-        itemName: selectedItemName,
-      }, // Timestamp for creation
-    });
-
-    // Handle success
-    handleClose();
-    console.log("Booking added successfully with ID:", docRef.id);
-  } catch (error) {
-    // Handle errors gracefully
-    console.error("Error adding booking:", error);
-    alert("An error occurred. Please try again later.");
-  }
-};
-
-
-
+  };
 
   useEffect(() => {
     const fetchBookings = async () => {
@@ -209,10 +278,10 @@ const handleAddBooking = async () => {
         setIsLoading(true); // Set loading to true before fetching
         const q = query(
           collection(db, "bookings"),
-          where("isCompleted", "==" ,false)
+          where("isCompleted", "==", false),
+          orderBy("createdAt", "desc")
         );
         const snapshot = await getDocs(q);
-        console.log(snapshot.docs);
         const fetchedBookings = snapshot.docs.map((doc) => ({
           ...doc.data(),
           id: doc.id,
@@ -295,11 +364,11 @@ const handleAddBooking = async () => {
               type="submit"
               variant="contained"
               color="primary"
-                disabled={loading}
-                onClick={() => handleOpenAddThirdPartyDialog()}
+              disabled={isLoading}
+              onClick={() => handleClickOpen()}
             >
-              {/* {loading ? <CircularProgress size={24} /> : "Add New Booking"} */}
-              Add New Booking
+              {isLoading ? <CircularProgress size={24} /> : "Add New Booking"}
+              {/* Add New Booking */}
             </Button>
           </div>
         </div>
@@ -318,8 +387,9 @@ const handleAddBooking = async () => {
           <DialogContentText>
             Please fill in the following details to add a new booking.
           </DialogContentText>
-          <Box sx={{ mt: 2 }}>
+          <Box sx={{ mt: 2, display: "flex", flexDirection: "column" }}>
             <TextField
+              sx={{ mt: 2 }}
               label="Patient Name"
               name="patientName"
               value={newBookingData.patientName}
@@ -327,22 +397,73 @@ const handleAddBooking = async () => {
               fullWidth
               required
             />
-            <FormControl fullWidth sx={{ mt: 2 }}>
+            <TextField
+              sx={{ mt: 2 }}
+              label="Patient Age"
+              name="age"
+              value={newBookingData.age}
+              onChange={handleInputChange}
+              fullWidth
+              required
+            />
+            {/* <TextField
+              sx={{ mt: 2 }}
+              label="Patient Sex"
+              name="sex"
+              value={newBookingData.sex}
+              onChange={handleInputChange}
+              fullWidth
+              required
+            /> */}
+            <RadioGroup
+              row
+              name="controlled-radio-buttons-group"
+              value={newBookingData.sex}
+              onChange={handleChange}
+            >
+              <FormControlLabel
+                value="male"
+                control={<Radio />}
+                label="Male"
+              />
+              <FormControlLabel
+                value="female"
+                control={<Radio />}
+                label="Female"
+              />
+            </RadioGroup>
+            <FormControl sx={{ mt: 2 }} fullWidth>
+              <InputLabel id="hospital-label">Hospital</InputLabel>
+              <Select
+                labelId="hospital-label"
+                name="hospital"
+                value={hospital}
+                onChange={(e) => handleSelectHospital(e.target.value)}
+              >
+                {hospitals.map((hospital) => (
+                  <MenuItem key={hospital.id} value={hospital}>
+                    {hospital.name}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            <FormControl sx={{ mt: 2 }} fullWidth>
               <InputLabel id="referralDoctor-label">Referral Doctor</InputLabel>
               <Select
                 labelId="referralDoctor-label"
                 name="referralDoctor"
-                value={newBookingData.referralDoctor}
-                onChange={handleSelectChange}
+                value={doctor}
+                onChange={(e) => handleSelectDoctor(e.target.value)}
               >
                 {doctors.map((doctor) => (
-                  <MenuItem key={doctor.id} value={doctor.id}>
+                  <MenuItem key={doctor.id} value={doctor}>
                     {doctor.name}
                   </MenuItem>
                 ))}
               </Select>
             </FormControl>
             <TextField
+              sx={{ mt: 2 }}
               label="Phone Number"
               name="phone"
               value={newBookingData.phone}
@@ -351,14 +472,7 @@ const handleAddBooking = async () => {
               required
             />
             <TextField
-              label="Hospital Name"
-              name="hospital"
-              value={newBookingData.hospital}
-              onChange={handleInputChange}
-              fullWidth
-              required
-            />
-            <TextField
+              sx={{ mt: 2 }}
               label="Date"
               type="date"
               name="date"
@@ -369,6 +483,7 @@ const handleAddBooking = async () => {
               required
             />
             <TextField
+              sx={{ mt: 2 }}
               label="Clinical Diagnosis"
               name="clinicalDiagnosis"
               value={newBookingData.clinicalDiagnosis}
@@ -378,6 +493,7 @@ const handleAddBooking = async () => {
               minRows={3}
             />
             <TextField
+              sx={{ mt: 2 }}
               label="Relevant Clinical History"
               name="clinicalHistory"
               value={newBookingData.clinicalHistory}
@@ -386,48 +502,63 @@ const handleAddBooking = async () => {
               multiline
               minRows={3}
             />
-            <Select
-              label="Category"
-              value={selectedCategoryName}
-              onChange={handleCategoryChange}
-            >
-              {categories.map((category) => (
-                <MenuItem key={category.id} value={category.name}>
-                  {category.name}
-                </MenuItem>
-              ))}
-            </Select>
-            <Select
-              label="Subcategory"
-              value={selectedSubcategoryName}
-              onChange={handleSubcategoryChange}
-              disabled={!selectedCategoryName} // Disable if no category selected
-            >
-              {subcategories.map((subcategory) => (
-                <MenuItem key={subcategory.id} value={subcategory.name}>
-                  {subcategory.name}
-                </MenuItem>
-              ))}
-            </Select>
-            <Select
-              label="Item"
-              value={selectedItemName}
-              onChange={handleItemNameChange}
-              disabled={!selectedSubcategoryName} // Disable if no subcategory selected
-            >
-              {itemNames.map((itemName) => (
-                <MenuItem key={itemName.id} value={itemName.name}>
-                  {itemName.name}
-                </MenuItem>
-              ))}
-            </Select>
+            <FormControl sx={{ mt: 2 }} fullWidth>
+              <InputLabel id="catgory-label">Specimen Category</InputLabel>
+              <Select
+                value={selectedCategory}
+                onChange={(e) => handleCategoryChange(e.target.value)}
+                labelId="category-label"
+                name="category"
+              >
+                {categories.map((category) => (
+                  <MenuItem key={category.id} value={category}>
+                    {category.name}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            <FormControl sx={{ mt: 2 }} fullWidth>
+              <InputLabel id="subcategory-label">
+                Specimen Sub Category
+              </InputLabel>
+              <Select
+                // sx={{ mt: 2 }}
+                value={selectedSubcategory}
+                disabled={!selectedCategory}
+                onChange={(e) => handleSubcategoryChange(e.target.value)}
+                labelId="subcategory-label"
+                name="subcategory"
+              >
+                {subcategories.map((subcategory) => (
+                  <MenuItem key={subcategory.id} value={subcategory}>
+                    {subcategory.name}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            <FormControl sx={{ mt: 2 }} fullWidth>
+              <InputLabel id="itemName-label">Specimen Item Name</InputLabel>
+              <Select
+                value={selectedItem}
+                disabled={!selectedSubcategory}
+                onChange={(e) => handleItemNameChange(e.target.value)}
+                labelId="itemName-label"
+                name="itemName"
+              >
+                {itemNames.map((itemName) => (
+                  <MenuItem key={itemName.id} value={itemName.name}>
+                    {itemName.name}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
             {/* ... additional fields for additionalInfo and typeOfSpecimen */}
           </Box>
         </DialogContent>
         <DialogActions>
           <Button onClick={handleClose}>Cancel</Button>
           <Button variant="contained" onClick={handleAddBooking}>
-            Add Booking
+            {isLoading ? <CircularProgress size={24} /> : "Add New Booking"}
           </Button>
         </DialogActions>
       </Dialog>
