@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import {
   CircularProgress,
   Button,
@@ -12,6 +12,10 @@ import {
   Card,
   CardContent,
   Typography,
+  IconButton,
+  Snackbar,
+  Alert,
+  CardActions,
 } from "@mui/material";
 import {
   collection,
@@ -21,10 +25,16 @@ import {
   serverTimestamp,
   orderBy,
   query,
+  doc,
+  deleteDoc,
 } from "firebase/firestore";
 import { db } from "../firebase"; // Assuming your Firestore instance is imported here
-import { Search } from "@mui/icons-material";
+import { Delete, Search } from "@mui/icons-material";
 import { useTheme } from "@emotion/react";
+// import Editor from "./Editor";
+// import Editor from "../Components/Editor/Editor";
+import JoditEditor from "jodit-react";
+
 
 const DiagnosisTemplates = () => {
   const [templates, setTemplates] = useState([]);
@@ -33,6 +43,9 @@ const DiagnosisTemplates = () => {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
+  const [deleteLoading, setDeleteLoading] = useState(false); // Track delete loader state
+  const [openSnackbar, setOpenSnackbar] = useState(false); // Track snackbar state
+  const [snackbarMsg, setSnackbarMsg] = useState(""); // Store snackbar message
 
   const theme = useTheme();
 
@@ -74,7 +87,7 @@ const DiagnosisTemplates = () => {
     setDescription("");
   };
 
-  const handleSaveTemplate = async () => {
+  const handleSaveTemplate = async (value) => {
     try {
       setLoading(true);
       const templateData = {
@@ -90,6 +103,39 @@ const DiagnosisTemplates = () => {
       setLoading(false);
     }
   };
+
+
+  const handleDeleteTemplate = async (templateId) => {
+    setDeleteLoading(true); // Show delete loader
+    try {
+      await deleteDoc(doc(db, "diagnosisTemplates", templateId));
+      setTemplates(templates.filter((template) => template.id !== templateId)); // Update local state
+      setOpenSnackbar(true); // Show success snackbar
+      setSnackbarMsg("Template deleted successfully!");
+    } catch (error) {
+      console.error("Error deleting template:", error);
+      setOpenSnackbar(true); // Show error snackbar
+      setSnackbarMsg("Error deleting template. Please try again.");
+    } finally {
+      setDeleteLoading(false); // Hide delete loader
+    }
+  };
+
+  const handleSnackbarClose = (event, reason) => {
+    if (reason === "clickaway") {
+      return;
+    }
+    setOpenSnackbar(false);
+  };
+
+const diagnosisDescriptionRef = useRef(null);
+const config = useMemo(
+  () => ({
+    readonly: false, // all options from https://xdsoft.net/jodit/docs/,
+    // placeholder: bookingData.grossDescription || "Start typing...",
+  }),
+  []
+);
 
   return (
     <div style={{ width: "100%" }}>
@@ -141,7 +187,11 @@ const DiagnosisTemplates = () => {
             disabled={loading}
             onClick={handleOpenAddTemplateDialog}
           >
-            {loading ? <CircularProgress size={24} /> : "Add Diagnosis Template"}
+            {loading ? (
+              <CircularProgress size={24} />
+            ) : (
+              "Add Diagnosis Template"
+            )}
           </Button>
         </div>
       </div>
@@ -149,18 +199,20 @@ const DiagnosisTemplates = () => {
       <Dialog
         open={addTemplateDialogOpen}
         onClose={handleCloseAddTemplateDialog}
+        fullWidth
+        // sx={{ width: "100%" }}
       >
         <DialogTitle>Add Diagnosis Template</DialogTitle>
         <DialogContent>
           <TextField
             error={name === ""}
             style={{ marginBottom: "10px" }}
-          label="Name"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          fullWidth
+            label="Name"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            fullWidth
           />
-          <TextField
+          {/* <TextField
             error={description === ""}
             multiline
             minRows={4}
@@ -168,12 +220,19 @@ const DiagnosisTemplates = () => {
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             fullWidth
+          /> */}
+          <JoditEditor
+            ref={diagnosisDescriptionRef}
+            value={description}
+            config={config}
+            tabIndex={1} // tabIndex of textarea
+            onChange={(newContent) => setDescription(newContent)} // preferred to use only this option to update the content for performance reasons
+            // onBlur={(newContent) => setGrossDescription(newContent)}
+            // onBlur={(newContent) => setContent(newContent)}
           />
-          {/* You can add more relevant diagnosis-specific fields here, such as: */}
-          {/* - ICD-10 code */}
-          {/* - Associated symptoms */}
-          {/* - Treatment options */}
-          {/* - Prognosis */}
+
+          {/* <Editor /> */}
+          {/* <Editor handleSave={handleSaveTemplate} /> */}
         </DialogContent>
         <DialogActions>
           <Button onClick={handleCloseAddTemplateDialog}>Cancel</Button>
@@ -204,12 +263,30 @@ const DiagnosisTemplates = () => {
                     >
                       {template.name}
                     </Typography>
-                    <Typography variant="body2">
+                    {/* <Typography variant="body2">
                       {template.description}
-                    </Typography>
+                    </Typography> */}
+
+                    <div
+                      dangerouslySetInnerHTML={{ __html: template.description }}
+                    />
+
                     {/* You can add more content to the card based on your specific diagnosis data */}
                     {/* For example, you could display the ICD-10 code or associated symptoms here. */}
                   </CardContent>
+                  <CardActions>
+                    <IconButton
+                      // sx={{ position: "absolute", top: 10, right: 10 }}
+                      onClick={() => handleDeleteTemplate(template.id)}
+                      disabled={deleteLoading} // Disable button while deleting
+                    >
+                      {deleteLoading ? (
+                        <CircularProgress size={24} /> // Show loader during delete
+                      ) : (
+                        <Delete color="error" /> // Replace with your preferred delete icon
+                      )}
+                    </IconButton>
+                  </CardActions>
                 </Card>
               </Grid>
             ))}
@@ -220,6 +297,13 @@ const DiagnosisTemplates = () => {
           </p>
         )}
       </div>
+      <Snackbar
+        open={openSnackbar}
+        autoHideDuration={2000}
+        onClose={handleSnackbarClose}
+        message={snackbarMsg}
+        // action={action}
+      />
     </div>
   );
 };

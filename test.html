@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Print Header and Footer Example</title>
+    <style>
+        @media print {
+            header {
+                position: fixed;
+                top: 0;
+                left: 0;
+                right: 0;
+                margin-bottom: 5cm;
+                background-color: lightgray;
+                padding: 0px;
+            }
+
+            footer {
+                position: fixed;
+                bottom: 0;
+                left: 0;
+                right: 0;
+                background-color: lightgray;
+                margin-top: 5cm;
+                padding: 0px;
+            }
+
+            main {
+                /* padding-top: 5cm; */
+                /* padding-bottom: 5cm; */
+            }
+        }
+        @page {
+  @top-center {
+    content: element(header);
+  }
+  @bottom-center {
+    content: element(footer);
+  }
+}
+    </style>
+</head>
+
+<body>
+    <header>
+        <h1>Header Content</h1>
+    </header>
+
+    <main>
+        <h2>Main Content</h2>
+        <p>This is the first content of the page.</p>
+        <p>This is the 2 content of the page.</p>
+        <p>This is the 3 content of the page.</p>
+        <p>This is the main content of the page.</p>
+        <p>This is the main content of the page.</p>
+        <p>This is the main content of the page.</p>
+        <p>This is the main content of the page.</p>
+        <p>This is the main content of the page.</p>
+        <p>This is the main content of the page.</p>
+        <p>This is the main content of the page.</p>
+        <p>This is the main content of the page.</p>
+        <p>This is the main content of the page.</p>
+        <p>This is the main content of the page.</p>
+        <p>This is the main content of the page.</p>
+        <p>This is the main content of the page.</p>
+        <p>This is the main content of the page.</p>
+        <p>This is the main content of the page.</p>
+        <p>This is the main content of the page.</p>
+        <p>This is the main content of the page.</p>
+        <p>This is the main content of the page.</p>
+        <p>This is the main content of the page.</p>
+        <p>This is the main content of the page.</p>
+        <p>This is the main content of the page.</p>
+        <p>This is the main content of the page.</p>
+        <p>This is the main content of the page.</p>
+        <p>This is the main content of the page.</p>
+        <p>This is the main content of the page.</p>
+        <p>This is the main content of the page.</p>
+        <p>This is the main content of the page.</p>
+        <p>This is the main content of the page.</p>
+        <p>This is the main content of the page.</p>
+        <p>This is the main content of the page.</p>
+        <p>This is the main content of the page.</p>
+        <p>This is the main content of the page.</p>
+        <p>This is the main content of the page.</p>
+        <p>This is the main content of the page.</p>
+        <p>This is the main content of the page.</p>
+        <p>This is the main content of the page.</p>
+        <p>This is the main content of the page.</p>
+        <p>This is the main content of the page.</p>
+        <p>This is the main content of the page.</p>
+        <p>This is the main content of the page.</p>
+        <p>This is the main content of the page.</p>
+        <p>This is the main content of the page.</p>
+        <p>This is the main content of the page.</p>
+        <p>This is the main content of the page.</p>
+        <p>This is the last content of the page.</p>
+
+    </main>
+
+    <footer>
+        <p>Footer Content</p>
+    </footer>
+</body>
+
+</html>

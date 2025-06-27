@@ -77,7 +77,7 @@ const from = location.state?.from?.pathname || '/';
                 alt="Logo"
                 style={{ width: "100%", height: "100%" }}
               />
-              <Typography variant="h6">Avanis Oncopath Lab</Typography>
+              <Typography style={{ marginTop: "20px" }} variant="h4">Dr. Avani's Oncopath Lab App</Typography>
             </Box>
           </Grid>
           <Grid item xs={12} md={6}>

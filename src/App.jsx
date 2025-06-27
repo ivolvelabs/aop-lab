@@ -24,6 +24,10 @@ import ThirdParty from "./ThirdParty/ThirdParty";
 import RequireAuth from "./Auth/RequireAuth";
 import SingleBooking from "./Bookings/SingleBooking";
 import Templates from "./Templates/Templates";
+import SubCategories from "./Masters/SubCategories/SubCategories";
+import ItemNames from "./Masters/ItemNames/ItemNames";
+import ResultAuthorised from "./Bookings/ResultAuthorised";
+import MyBookings from "./Bookings/MyBookings";
 
 const App = () => {
   const { isLoggedIn, role, authUser } = useAuth();
@@ -49,7 +53,7 @@ const App = () => {
     },
     {
       path: "thirdparty",
-      name: "Third Party",
+      name: "Doctors & Hospitals",
       roles: ["admin", "receptionist"],
       component: <ThirdParty />,
     },
@@ -85,6 +89,9 @@ const App = () => {
         <Route element={<RequireAuth />}>
           <Route path="/" element={<HomePage />} />
           <Route path="bookings/:bookingId" element={<SingleBooking />} />
+          <Route path="myBookings/:bookingId" element={<MyBookings />} />
+          <Route path="masters/:categoryId" element={<SubCategories />} />
+          <Route path="masters/:categoryId/:subCatId" element={<ItemNames />} />
           {mainNavs
             .filter((nav) => role && nav.roles.includes(role))
             .map((nav, index) => {

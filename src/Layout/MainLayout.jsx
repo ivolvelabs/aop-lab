@@ -46,42 +46,54 @@ function MainLayout( ) {
     {
       link: "/",
       name: "Home",
-      icon: <Home />,
+      icon: <Home sx={{
+        color: "#00cbcb"
+      }} />,
       index: 0,
       roles: ["admin", "technician", "receptionist", "thirdparty"],
     },
     {
       link: "bookings",
       name: "Bookings",
-      icon: <BiotechIcon />,
+      icon: <BiotechIcon sx={{
+        color: "#00cbcb"
+      }} />,
       index: 1,
       roles: ["admin", "technician", "receptionist", "thirdparty"],
     },
     {
       link: "thirdparty",
-      name: "Third Party",
-      icon: <LocalHospital />,
+      name: "Doctors & Hospitals",
+      icon: <LocalHospital sx={{
+        color: "#00cbcb"
+      }} />,
       index: 2,
-      roles: ["admin"],
+      roles: ["admin", "receptionist"],
     },
     {
       link: "masters",
       name: "Masters",
-      icon: <Widgets />,
+      icon: <Widgets sx={{
+        color: "#00cbcb"
+      }} />,
       index: 3,
       roles: ["admin", "technician", "receptionist"],
     },
     {
       link: "usersandpermissions",
       name: "Users and Permissions",
-      icon: <PeopleAlt />,
+      icon: <PeopleAlt sx={{
+        color: "#00cbcb"
+      }} />,
       index: 4,
       roles: ["admin"],
     },
     {
       link: "templates",
       name: "Templates",
-      icon: <Feed />,
+      icon: <Feed sx={{ 
+        color: "#00cbcb"
+       }} />,
       index: 5,
       roles: ["admin"],
     },
@@ -102,12 +114,24 @@ function MainLayout( ) {
           },
         }}
       >
-        <div style={{ width: "100%", display: "flex", justifyContent: "center", alignItems: "center", padding: "10px" }}>
+        <div
+          style={{
+            width: "100%",
+            display: "flex",
+            justifyContent: "center",
+            alignItems: "center",
+            padding: "10px",
+            flexDirection: "column",
+          }}
+        >
           <img
             src="logo.png" // Replace with your logo image URL
             alt="Logo"
-            style={{ width: "100%" }}
+            style={{ height: "70%"}}
           />
+          <Typography style={{ marginTop: "20px", textAlign: "center" }} variant="h5">
+            Dr. Avani's Oncopath Lab App
+          </Typography>
         </div>
         <List>
           {navs
@@ -121,7 +145,7 @@ function MainLayout( ) {
                   onClick={() => handleListItemClick(nav)}
                   sx={{
                     borderRadius: "10px",
-                    margin: "10px",
+                    margin: "5px",
                     padding: "0px",
                     "&.MuiListItemButton-root:hover": {
                       backgroundColor: "primary.main",
@@ -144,7 +168,12 @@ function MainLayout( ) {
                     to={nav.link}
                   >
                     <ListItemIcon
-                      style={{ justifyContent: "center", alignItems: "center" }}
+                      // style={{ justifyContent: "center", alignItems: "center" }}
+                      sx={{
+                        justifyContent: "center",
+                        alignItems: "center",
+                        
+                      }}
                     >
                       {nav.icon}
                     </ListItemIcon>

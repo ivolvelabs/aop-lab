@@ -13,8 +13,13 @@ import { collection, getDocs, query, where } from "firebase/firestore";
 import { db } from "../firebase"; // Assuming your Firestore instance is imported here
 import BookingsTable from "./BookingsTable";
 import { Search } from "@mui/icons-material";
+import { useAuth } from "../Contexts/AuthContext";
 
-const PastBookings = () => {
+const ThirdPartyReports = () => {
+const { role, user } = useAuth();
+console.log(user);
+
+
   const [bookings, setBookings] = useState([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [isLoading, setIsLoading] = useState(true); // Added loading state
@@ -25,7 +30,8 @@ const PastBookings = () => {
         setIsLoading(true); // Set loading to true before fetching
         const q = query(
           collection(db, "bookings"),
-          where("isCompleted", "==", true)
+          where("hospital.email", "==", user.email),
+          where("isCompleted", "==", true),
         );
         const snapshot = await getDocs(q);
         console.log(snapshot.docs);
@@ -96,32 +102,14 @@ const PastBookings = () => {
                   </InputAdornment>
                 ),
               }}
-              // sx={{ mb: 2 }}
             />
           </div>
-          {/* <div
-            style={{
-              display: "flex",
-              flex: 1,
-              alignItems: "center",
-              justifyContent: "end",
-            }}
-          >
-            <Button
-              type="submit"
-              variant="contained"
-              color="primary"
-            > */}
-              {/* {loading ? <CircularProgress size={24} /> : "Add New Booking"} */}
-              {/* Add New Booking
-            </Button>
-          </div> */}
         </div>
       </div>
       {isLoading ? (
         <CircularProgress sx={{ mt: 2 }} />
       ) : bookings.length > 0 ? (
-        <BookingsTable bookings={filteredBookings} isCurrent={true} />
+        <BookingsTable bookings={filteredBookings} role={role} />
       ) : (
         <p>No bookings found.</p>
       )}
@@ -129,4 +117,4 @@ const PastBookings = () => {
   );
 };
 
-export default PastBookings;
+export default ThirdPartyReports;

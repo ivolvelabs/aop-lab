@@ -162,7 +162,7 @@ const ThirdPartyHospitals = () => {
                   </InputAdornment>
                 ),
               }}
-              // sx={{ mb: 2 }}
+              sx={{ margin: "10px 0px" }}
             />
           </div>
           <div
@@ -180,7 +180,7 @@ const ThirdPartyHospitals = () => {
               disabled={loading}
               onClick={() => handleOpenAddThirdPartyDialog()}
             >
-              {loading ? <CircularProgress size={24} /> : "Add Third Party"}
+              {loading ? <CircularProgress size={24} /> : "Add Hospital/Clinic"}
             </Button>
           </div>
         </div>
@@ -192,7 +192,7 @@ const ThirdPartyHospitals = () => {
         onClose={handleCloseAddThirdPartyDialog}
         // style={{ width: "50vw" }}
       >
-        <DialogTitle>Add Third Party</DialogTitle>
+        <DialogTitle>Add Hospital/Clinic</DialogTitle>
         <DialogContent
           style={{
             display: "flex",
@@ -286,9 +286,7 @@ const ThirdPartyHospitals = () => {
         <DialogActions>
           <Button onClick={handleCloseAddThirdPartyDialog}>Cancel</Button>
           <Button
-            disabled={
-              name.trim() === "" || email.trim() === ""
-            }
+            disabled={name.trim() === "" || email.trim() === ""}
             onClick={handleSaveThirdParty}
           >
             {loading ? <CircularProgress size={24} /> : "Save"}

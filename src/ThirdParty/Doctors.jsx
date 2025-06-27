@@ -138,6 +138,7 @@ const Doctor = () => {
                 </InputAdornment>
               ),
             }}
+            sx={{ margin: "10px 0px" }}
           />
         </div>
         <div

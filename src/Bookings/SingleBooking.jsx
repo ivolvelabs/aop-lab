@@ -10,7 +10,7 @@ import {
   CircularProgress,
 } from "@mui/material";
 import { useNavigate, useParams } from "react-router-dom";
-import { doc, getDoc, getFirestore, updateDoc } from "firebase/firestore";
+import { collection, doc, getDoc, getFirestore, onSnapshot, query, updateDoc } from "firebase/firestore";
 import Received from "./Received";
 import Grossed from "./Grossed";
 import SlideDelivered from "./SlideDelivered";
@@ -18,79 +18,99 @@ import ResultEntered from "./ResultEntered";
 import ResultAuthorised from "./ResultAuthorised";
 
 const SingleBooking = () => {
+  // State variables
   const [activeStep, setActiveStep] = useState(0);
   const [bookingData, setBookingData] = useState({});
   const [statesInfo, setStatesInfo] = useState([]);
   const { bookingId } = useParams();
-  const navigate = useNavigate();
   const [isLoading, setIsLoading] = useState(true);
 
+
+  const navigate = useNavigate();
+
+
+useEffect(() => {
+  const db = getFirestore();
+  // const docRef = doc(db, "bookings", bookingId);
   const getBookingById = async (bookingId) => {
-    const db = getFirestore();
-    const docRef = doc(db, "bookings", bookingId);
+    const bookingRef = doc(db, "bookings", bookingId);
 
-    try {
-      const docSnap = await getDoc(docRef);
-
-      if (docSnap.exists) {
-        const data = docSnap.data();
-        setBookingData(data);
-        setStatesInfo(data.statesInfo);
-        const initialActiveStep = data.statesInfo.findIndex((s) => !s.isDone);
-        setActiveStep(initialActiveStep);
-      } else {
-        console.error("Booking not found:", bookingId);
-      }
-    } catch (error) {
-      console.error("Error fetching booking:", error);
-    } finally {
-      setIsLoading(false);
+  const unsubscribe = await onSnapshot(bookingRef, (docSnap) => {
+    if (docSnap.exists) {
+      const data = docSnap.data();
+      setBookingData(data);
+      setStatesInfo(data.statesInfo);
+      const initialActiveStep = data.statesInfo.findIndex((s) => !s.isDone);
+      setActiveStep(initialActiveStep);
+    } else {
+      console.error("Booking not found:", bookingId);
     }
-  };
+    setIsLoading(false); // Update loading state after receiving data
+  }, (error) => {
+    console.error("Error fetching booking:", error);
+    setIsLoading(false); // Update loading state on error
+  });
 
-  useEffect(() => {
-    getBookingById(bookingId);
-  }, [bookingId]);
+  // Remember to unsubscribe from the listener when the component unmounts
+  // to avoid memory leaks
+  return unsubscribe;
+};
+  // };
+  // const getBookingById = async (bookingId) => {
+  //   try {
+  //     const docSnap = await getDoc(docRef);
 
-  const handleSaveStep = async (stepIndex) => {
-    // Implement logic to update state in Firebase (e.g., using Firestore)
-    setIsLoading(true);
+  //     if (docSnap.exists) {
+  //       const data = docSnap.data();
+  //       data.id = bookingId;
+  //       setBookingData(data);
+  //       setStatesInfo(data.statesInfo);
+  //       const initialActiveStep = data.statesInfo.findIndex((s) => !s.isDone);
+  //       setActiveStep(initialActiveStep);
+  //     } else {
+  //       console.error("Booking not found:", bookingId);
+  //     }
+  //   } catch (error) {
+  //     console.error("Error fetching booking:", error);
+  //   } finally {
+  //     setIsLoading(false);
+  //   }
+  // };
 
-    try {
-      const updatedStatesInfo = [...statesInfo];
-      updatedStatesInfo[stepIndex].isDone = true;
+  getBookingById(bookingId);
+}, [bookingId]);
 
-      const bookingRef = doc(getFirestore(), "bookings", bookingId);
-      await updateDoc(bookingRef, { statesInfo: updatedStatesInfo });
 
-      setStatesInfo(updatedStatesInfo);
-    } catch (error) {
-      console.error("Error saving step:", error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
+const handleNext = () => {
+  if (statesInfo[activeStep].isDone) {
+    setActiveStep((prevActiveStep) => prevActiveStep + 1); // Use functional state update
+  }
+};
 
-  const handleNext = () => {
-    if (statesInfo[activeStep].isDone) {
-      setActiveStep(activeStep + 1);
-    }
-  };
+const handleBack = () => {
+  setActiveStep((prevActiveStep) => prevActiveStep - 1); // Use functional state update
+};
 
-  const handleBack = () => {
-    if (statesInfo[activeStep - 1].isDone) {
-      setActiveStep(activeStep - 1);
-    }
-  };
+const handleUpdateStatesInfo = (updatedStatesInfo) => {
+  setStatesInfo(updatedStatesInfo); // Update statesInfo from child
+};
 
   return (
-    <Box sx={{ width: "100%" }}>
+    <Box
+      sx={{
+        width: "100%",
+        height: "100%",
+        display: "flex",
+        flexDirection: "column",
+      }}
+    >
       {isLoading ? (
         <Box sx={{ display: "flex", justifyContent: "center", mt: 2 }}>
           <CircularProgress />
         </Box>
       ) : (
-        <Box sx={{ width: "100%" }}>
+        <>
+          {/* Stepper component for step visualization */}
           <Stepper activeStep={activeStep} alternativeLabel>
             {statesInfo.map((step, index) => (
               <Step key={step.state}>
@@ -100,37 +120,41 @@ const SingleBooking = () => {
             ))}
           </Stepper>
 
-          <div>
+          {/* Content area for displaying the current step's component */}
+          <Box sx={{ flex: 1, overflowY: "auto", pt: 2 }}>
             {activeStep === 0 ? (
-              <Received bookingData={bookingData} />
+              <Received handleUpdateStatesInfo={handleUpdateStatesInfo} bookingData={bookingData} />
             ) : activeStep === 1 ? (
-              <Grossed bookingData={bookingData} />
+              <Grossed handleUpdateStatesInfo={handleUpdateStatesInfo} bookingData={bookingData} statesInfo={statesInfo}/>
             ) : activeStep === 2 ? (
-              <SlideDelivered bookingData={bookingData} />
+              <SlideDelivered handleUpdateStatesInfo={handleUpdateStatesInfo} bookingData={bookingData} statesInfo={statesInfo} />
             ) : activeStep === 3 ? (
-              <ResultEntered bookingData={bookingData} />
+              <ResultEntered handleUpdateStatesInfo={handleUpdateStatesInfo} bookingData={bookingData} statesInfo={statesInfo} />
             ) : (
-              <ResultAuthorised bookingData={bookingData} />
+              <ResultAuthorised handleUpdateStatesInfo={handleUpdateStatesInfo} id={bookingData.id} bookingData={bookingData} statesInfo={statesInfo} />
             )}
-            <Box sx={{ display: "flex", flexDirection: "row", pt: 2 }}>
-              <Button
-                color="inherit"
-                disabled={activeStep === 0 || !statesInfo[0].isDone} // Disable back button if first step or previous step not completed
-                onClick={handleBack}
-                sx={{ mr: 1 }}
-              >
-                Back
-              </Button>
-              <Box sx={{ flex: "1 1 auto" }} />
-              <Button
-                onClick={handleNext}
-                disabled={activeStep === 4 || !statesInfo[activeStep].isDone} // Disable next button if last step or current step not completed
-              >
-                Next
-              </Button>
-            </Box>
-          </div>
-        </Box>
+          </Box>
+
+          {/* Button group for navigation and saving */}
+          <Box sx={{ display: "flex", justifyContent: "space-between", mt: 1 }}>
+            <Button
+              variant="contained"
+              disabled={activeStep === 0 || !statesInfo[0].isDone}
+              onClick={handleBack}
+              sx={{ mr: 1 }}
+            >
+              Back
+            </Button>
+            
+            <Button
+              disabled={!statesInfo[activeStep]?.isDone}
+              variant="contained"
+              onClick={handleNext}
+            >
+              Next
+            </Button>
+          </Box>
+        </>
       )}
     </Box>
   );

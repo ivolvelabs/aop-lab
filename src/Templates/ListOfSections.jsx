@@ -12,6 +12,9 @@ import {
   CardContent,
   Typography,
   InputAdornment,
+  CardActions,
+  IconButton,
+  Snackbar,
 } from "@mui/material";
 import {
   collection,
@@ -21,9 +24,11 @@ import {
   serverTimestamp,
   orderBy,
   query,
+  deleteDoc,
+  doc,
 } from "firebase/firestore";
 import { db } from "../firebase"; // Assuming your Firestore instance is imported here
-import { Search } from "@mui/icons-material";
+import { Delete, Search } from "@mui/icons-material";
 import { useTheme } from "@emotion/react";
 
 const ListOfSectionsTemplates = () => {
@@ -33,6 +38,9 @@ const ListOfSectionsTemplates = () => {
   const [name, setName] = useState("");
   const [description, setDescription] = useState(""); // Added for description
   const [searchTerm, setSearchTerm] = useState("");
+  const [deleteLoading, setDeleteLoading] = useState(false); // Track delete loader state
+  const [openSnackbar, setOpenSnackbar] = useState(false); // Track snackbar state
+  const [snackbarMsg, setSnackbarMsg] = useState(""); // Store snackbar message
 
   const theme = useTheme();
 
@@ -90,6 +98,33 @@ const ListOfSectionsTemplates = () => {
       setLoading(false);
     }
   };
+
+
+const handleDeleteTemplate = async (templateId) => {
+  setDeleteLoading(true); // Show delete loader
+  try {
+    await deleteDoc(doc(db, "listOfSectionsTemplates", templateId));
+    setTemplates(templates.filter((template) => template.id !== templateId)); // Update local state
+    setOpenSnackbar(true); // Show success snackbar
+    setSnackbarMsg("Template deleted successfully!");
+  } catch (error) {
+    console.error("Error deleting template:", error);
+    setOpenSnackbar(true); // Show error snackbar
+    setSnackbarMsg("Error deleting template. Please try again.");
+  } finally {
+    setDeleteLoading(false); // Hide delete loader
+  }
+};
+
+const handleSnackbarClose = (event, reason) => {
+  if (reason === "clickaway") {
+    return;
+  }
+  setOpenSnackbar(false);
+};
+
+
+
 
   return (
     <div style={{ width: "100%" }}>
@@ -203,6 +238,19 @@ const ListOfSectionsTemplates = () => {
                     </Typography>
                     {/* You can add more content to the card based on your template data */}
                   </CardContent>
+                  <CardActions>
+                    <IconButton
+                      // sx={{ position: "absolute", top: 10, right: 10 }}
+                      onClick={() => handleDeleteTemplate(template.id)}
+                      disabled={deleteLoading} // Disable button while deleting
+                    >
+                      {deleteLoading ? (
+                        <CircularProgress size={24} /> // Show loader during delete
+                      ) : (
+                        <Delete color="error" /> // Replace with your preferred delete icon
+                      )}
+                    </IconButton>
+                  </CardActions>
                 </Card>
               </Grid>
             ))}
@@ -213,6 +261,13 @@ const ListOfSectionsTemplates = () => {
           </p>
         )}
       </div>
+      <Snackbar
+        open={openSnackbar}
+        autoHideDuration={2000}
+        onClose={handleSnackbarClose}
+        message={snackbarMsg}
+        // action={action}
+      />
     </div>
   );
 };

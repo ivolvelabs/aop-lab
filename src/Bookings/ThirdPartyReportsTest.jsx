@@ -42,10 +42,11 @@ import dayjs from "dayjs";
 import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
 import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs";
 import { DatePicker } from "@mui/x-date-pickers";
+import { useAuth } from "../Contexts/AuthContext";
 
 const filter = createFilterOptions();
 
-const CurrentBookings = () => {
+const ThirdPartyReportsTest = () => {
   const [bookings, setBookings] = useState([]);
   const [doctors, setDoctors] = useState([]);
   const [doctor, setDoctor] = useState("");
@@ -62,21 +63,26 @@ const CurrentBookings = () => {
   const [selectedSubcategory, setSelectedSubcategory] = useState("");
   const [selectedItem, setSelectedItem] = useState("");
   const [date, setDate] = useState(dayjs(new Date()));
-  // const [prn, setPrn] = useState("");
-  // const [crn, setCrn] = useState("");
-  const [reportNumber, setReportNumber] = useState("");
-  
-  
-  // const fetchPrn = async () => {
-  //   const prnRef = doc(db, "metaData", "metaDataDetails");
-  //   const prnData = await getDoc(prnRef);
-  //   const prnumber = prnData.data().prevReportNumber;
-  //   // setPrn(prnumber.substring(prnumber.lastIndexOf("/") + 1));
-  //   return prnumber;
-  // }
-  
+  const [prn, setPrn] = useState("");
+  const [crn, setCrn] = useState("");
 
-  
+const { role, user } = useAuth();
+
+
+
+  const fetchPrn = async () => {
+    const prnRef = doc(db, "metaData", "metaDataDetails");
+    const prnData = await getDoc(prnRef);
+    const prnumber = prnData.data().prevReportNumber;
+    // console.log(`${prnumber}`);
+    console.log(
+      "-----------------------------------------------" +
+        prnumber.substring(prnumber.lastIndexOf("/") + 1)
+    );
+
+    setPrn(prnumber.substring(prnumber.lastIndexOf("/") + 1));
+    return prnumber;
+  };
 
   const handleClickOpen = () => {
     setOpen(true);
@@ -89,7 +95,7 @@ const CurrentBookings = () => {
     setSelectedCategory("");
     setSelectedSubcategory("");
     setSelectedItem("");
-    setReportNumber("");
+    setCrn("");
     setNewBookingData({
       patientName: "",
       age: "",
@@ -113,33 +119,6 @@ const CurrentBookings = () => {
     });
   };
 
-const handleReportNumber = async(value) => {
-  const year = new Date().getFullYear().toString().substring(2);
-  console.log(year);
-  console.log(year === value.crnYear);
-  if (year === value.crnYear) {
-    setReportNumber(`${value.crnSeries}/${value.crnYear}/${Number(value.crNumber) + 1}`);
-  console.log(
-    `${value.crnSeries}/${value.crnYear}/${Number(value.crNumber) + 1}`
-  );
-  }
-  else {
-    const catRef = doc(db, "categories", where("name", "==", value.name));
-    await updateDoc(catRef, {
-      years: [
-        {
-          year: year,
-          rnSeries: `AOP/${value.name.substring(0, 1).toUpperCase()}/${year}`,
-          crNumber: 0,
-        },
-      ],
-    });
-    setReportNumber(`${value.crnSeries}/${year}/${Number(value.crNumber) + 1}`);
-
-  }
-}
-
-
   // Function to handle selection changes
   const handleSelectDoctor = (singleDoctor) => {
     setDoctor(singleDoctor);
@@ -159,7 +138,8 @@ const handleReportNumber = async(value) => {
     try {
       const hospitalsQuery = query(
         collection(db, "thirdparty"),
-        where("type", "==", "hospital")
+        where("type", "==", "hospital"),
+        where("email", "==", user.email)
       );
       const doctorsQuery = query(
         collection(db, "thirdparty"),
@@ -186,25 +166,27 @@ const handleReportNumber = async(value) => {
     }
   };
 
-  const handleCategoryChange = async (value) => {
-    // const year = new Date().getFullYear().toString().substring(2);
+  const handleCategoryChange = (value) => {
+    const year = new Date().getFullYear().toString().substring(2);
     setSelectedCategory(value);
     fetchSubcategories(value.id);
-    handleReportNumber(value);
-    // console.log(value);
-    // console.log(`AOP/${value.name.substring(0, 3).toUpperCase()}/${year}/${Number(value.crn) + 1}`);
-    // setCrn(
-    //   `AOP/${value.name.substring(0, 1).toUpperCase()}/${year}/${
-    //     Number(prn) + 1
-    //   }`
-    // );
+    console.log(prn);
+    console.log(
+      `AOP/${value.name.substring(0, 3).toUpperCase()}/${year}/${
+        Number(prn) + 1
+      }`
+    );
+    setCrn(
+      `AOP/${value.name.substring(0, 1).toUpperCase()}/${year}/${
+        Number(prn) + 1
+      }`
+    );
   };
 
   const handleSubcategoryChange = (value) => {
     setSelectedSubcategory(value);
     fetchItemNames(value.id);
-      console.log(reportNumber);
-
+    console.log(crn);
   };
 
   const handleItemNameChange = (value) => {
@@ -272,38 +254,23 @@ const handleReportNumber = async(value) => {
 
   // Call the fetch functions in your component's effect or when needed
   useEffect(() => {
-    // fetchPrn();
+    fetchPrn();
     fetchHospitalsAndDoctors();
     fetchCategories();
   }, []);
 
   const handleAddBooking = async () => {
-
-      const docRef = doc(collection(db, "bookings"));
-      const metaDataRef = doc(db, "metaData", "metaDataDetails");
+    const docRef = doc(collection(db, "bookings"));
+    const metaDataRef = doc(db, "metaData", "metaDataDetails");
     try {
       setIsLoading(true);
-      
-const itemRef = collection(
-  db,
-  "categories",
-  selectedCategory.id,
-  "subcategories",
-  selectedSubcategory.id,
-  "itemNames"
-);
-await addDoc(itemRef, {
-  name: selectedItem.name,
-  createdAt: serverTimestamp(),
-});
-
 
       const statesInfo = [
         {
           state: "received",
           stateName: "Received",
           isDone: true,
-          updatedAt: new Date(), 
+          updatedAt: new Date(),
         },
         {
           state: "grossed",
@@ -335,26 +302,25 @@ await addDoc(itemRef, {
         ...newBookingData,
         referralDoctor: doctor,
         hospital,
-        // bookingDate: dayjs(date).format("DD/MM/YYYY"),
-        bookingDate: new Date(),
+        bookingDate: dayjs(date).format("DD-MM-YYYY"),
         isCompleted: false,
         createdAt: serverTimestamp(),
         statesInfo,
-        // serialNumber: crn,
+        serialNumber: crn,
         id: docRef.id,
         typeOfSpecimen: {
           category: selectedCategory.name,
           subcategory: selectedSubcategory.name,
-          itemName: selectedItem.name,
+          itemName: selectedItem,
         },
       };
 
       await updateDoc(metaDataRef, {
-        // prevReportNumber: crn,
-      }); 
-      
+        prevReportNumber: crn,
+      });
+
       await setDoc(docRef, bookingData);
-      
+
       setBookings((prevBookings) => [bookingData, ...prevBookings]);
 
       // Handle success
@@ -374,8 +340,8 @@ await addDoc(itemRef, {
         setIsLoading(true); // Set loading to true before fetching
         const q = query(
           collection(db, "bookings"),
-          where("isCompleted", "==", false),
-          orderBy("createdAt", "desc")
+          where("hospital.email", "==", user.email),
+          where("isCompleted", "==", true)
         );
         const snapshot = await getDocs(q);
         const fetchedBookings = snapshot.docs.map((doc) => ({
@@ -434,8 +400,7 @@ await addDoc(itemRef, {
             <TextField
               value={searchQuery}
               onChange={handleSearch}
-              // label="Search"
-              label="Search here..."
+              //   label="Search"
               type="search"
               fullWidth
               size="small"
@@ -446,7 +411,7 @@ await addDoc(itemRef, {
                   </InputAdornment>
                 ),
               }}
-              sx={{ margin: "10px 0px"}}
+              // sx={{ mb: 2 }}
             />
           </div>
           <div
@@ -473,7 +438,7 @@ await addDoc(itemRef, {
       {isLoading ? (
         <CircularProgress sx={{ mt: 2 }} />
       ) : bookings.length > 0 ? (
-        <BookingsTable bookings={filteredBookings} isCurrent={true} />
+        <BookingsTable bookings={filteredBookings} role={role} />
       ) : (
         <p>No bookings found.</p>
       )}
@@ -532,8 +497,7 @@ await addDoc(itemRef, {
 
             <LocalizationProvider dateAdapter={AdapterDayjs}>
               <DatePicker
-                sx={{ mt: 2 }}
-                label="Booking Date"
+                label="Controlled picker"
                 value={date}
                 format="DD-MM-YYYY"
                 onChange={(newValue) => setDate(newValue)}
@@ -722,7 +686,7 @@ await addDoc(itemRef, {
                 ))}
               </Select>
             </FormControl>
-            {/* <FormControl variant="filled" sx={{ mt: 2 }} fullWidth>
+            <FormControl variant="filled" sx={{ mt: 2 }} fullWidth>
               <InputLabel id="itemName-label">Name of Specimen</InputLabel>
               <Select
                 value={selectedItem}
@@ -739,72 +703,8 @@ await addDoc(itemRef, {
                   </MenuItem>
                 ))}
               </Select>
-            </FormControl> */}
-
-            <Autocomplete
-              value={selectedItem}
-              onChange={(event, newValue) => {
-                // if (typeof newValue === "string") {
-                //   setSelectedItem({
-                //     newValue,
-                //   });
-                // } else if (newValue && newValue.inputValue) {
-                // } else
-                if (newValue && newValue.inputValue) {
-                  // Create a new value from the user input
-                  setSelectedItem({
-                    name: newValue.inputValue,
-                  });
-                } else {
-                  setSelectedItem(newValue);
-                }
-              }}
-              filterOptions={(options, params) => {
-                const filtered = filter(options, params);
-
-                const { inputValue } = params;
-                // Suggest the creation of a new value
-                const isExisting = options.some(
-                  (option) => inputValue === option.name
-                );
-                if (inputValue !== "" && !isExisting) {
-                  filtered.push({
-                    inputValue,
-                    name: `Add "${inputValue}"`,
-                  });
-                }
-
-                return filtered;
-              }}
-              selectOnFocus
-              clearOnBlur
-              handleHomeEndKeys
-              id="name-of-specimen"
-              options={itemNames}
-              getOptionLabel={(option) => {
-                // Value selected with enter, right from the input
-                if (typeof option === "string") {
-                  return option;
-                }
-                // Add "xxx" option created dynamically
-                if (option.inputValue) {
-                  return option.inputValue;
-                }
-                // Regular option
-                return option.name;
-              }}
-              renderOption={(props, option) => (
-                <li {...props}>{option.name}</li>
-              )}
-              freeSolo
-              sx={{ mt: 2 }}
-              renderInput={(params) => (
-                <TextField
-                  {...params}
-                  label="Select or Enter Name of Specimen"
-                />
-              )}
-            />
+            </FormControl>
+            {/* ... additional fields for additionalInfo and typeOfSpecimen */}
           </Box>
         </DialogContent>
         <DialogActions>
@@ -818,4 +718,4 @@ await addDoc(itemRef, {
   );
 };
 
-export default CurrentBookings;
+export default ThirdPartyReportsTest;

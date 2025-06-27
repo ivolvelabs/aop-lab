@@ -12,6 +12,7 @@ import {
   Card,
   CardContent,
   Typography,
+  CardActions,
 } from "@mui/material";
 import {
   collection,
@@ -21,10 +22,13 @@ import {
   serverTimestamp,
   orderBy,
   query,
+  doc,
+  setDoc,
 } from "firebase/firestore";
 import { db } from "../../firebase"; // Assuming your Firestore instance is imported here
 import { Search } from "@mui/icons-material";
 import { useTheme } from "@emotion/react";
+import { useNavigate } from "react-router-dom";
 
 const Category = () => {
   const [categories, setCategories] = useState([]);
@@ -32,8 +36,10 @@ const Category = () => {
   const [addCategoryDialogOpen, setAddCategoryDialogOpen] = useState(false);
   const [name, setName] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
+  // const [categoryRn, setCategoryRn] = useState(0);
 
   const theme = useTheme();
+  const navigate = useNavigate();
 
   useEffect(() => {
     const q = query(collection(db, "categories"), orderBy("createdAt", "desc"));
@@ -68,12 +74,28 @@ const Category = () => {
 
   const handleSaveCategory = async () => {
     try {
+      const year = new Date().getFullYear().toString().substring(2);
       setLoading(true);
       const categoryData = {
         name,
         createdAt: serverTimestamp(),
+        years: [
+          {
+            year: year,
+            rnSeries: `AOP/${name.substring(0, 1).toUpperCase()}/${year}`,
+            crNumber: 0,
+          },
+        ],
       };
-      await addDoc(collection(db, "categories"), categoryData);
+      // const categoryData = {
+      //   name,
+      //   createdAt: serverTimestamp(),
+      //   crnSeries: `AOP/${name.substring(0, 1).toUpperCase()}`,
+      //   crNumber: "0",
+      //   crnYear: year,
+      // };
+      const docRef = doc(collection(db, "categories"));
+      await setDoc(docRef, {...categoryData, id: docRef.id});
       const q = query(
         collection(db, "categories"),
         orderBy("createdAt", "desc")
@@ -190,6 +212,18 @@ const Category = () => {
                     </Typography>
                     {/* You can add more content to the card based on your category data */}
                   </CardContent>
+                  <CardActions>
+                    <Button
+                      size="small"
+                      color="primary"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        navigate(`/masters/${category.id}`);
+                      }}
+                    >
+                      Open
+                    </Button>
+                  </CardActions>
                 </Card>
               </Grid>
             ))}

@@ -12,6 +12,9 @@ import {
   Card,
   CardContent,
   Typography,
+  CardActions,
+  IconButton,
+  Snackbar,
 } from "@mui/material";
 import {
   collection,
@@ -21,9 +24,11 @@ import {
   serverTimestamp,
   orderBy,
   query,
+  deleteDoc,
+  doc,
 } from "firebase/firestore";
 import { db } from "../firebase"; // Assuming your Firestore instance is imported here
-import { Search } from "@mui/icons-material";
+import { Delete, Search } from "@mui/icons-material";
 import { useTheme } from "@emotion/react";
 
 const SpecimenTemplates = () => {
@@ -31,9 +36,11 @@ const SpecimenTemplates = () => {
   const [loading, setLoading] = useState(true);
   const [addTemplateDialogOpen, setAddTemplateDialogOpen] = useState(false);
   const [name, setName] = useState("");
-  const [specimenType, setSpecimenType] = useState("");
-  const [specimenSource, setSpecimenSource] = useState("");
+  const [description, setDescription] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
+  const [deleteLoading, setDeleteLoading] = useState(false); // Track delete loader state
+  const [openSnackbar, setOpenSnackbar] = useState(false); // Track snackbar state
+  const [snackbarMsg, setSnackbarMsg] = useState(""); // Store snackbar message
 
   const theme = useTheme();
 
@@ -46,7 +53,7 @@ const SpecimenTemplates = () => {
     const unsubscribe = onSnapshot(q, (querySnapshot) => {
       const filteredTemplates = querySnapshot.docs.filter((doc) => {
         const data = doc.data();
-        return [data.name, data.specimenType, data.specimenSource]
+        return [data.name, data.description]
           .join(" ")
           .toLowerCase()
           .includes(searchTerm.toLowerCase());
@@ -72,27 +79,55 @@ const SpecimenTemplates = () => {
   const handleCloseAddTemplateDialog = () => {
     setAddTemplateDialogOpen(false);
     setName("");
-    setSpecimenType("");
-    setSpecimenSource("");
+    setDescription("");
   };
 
   const handleSaveTemplate = async () => {
+    setLoading(true);
     try {
-      setLoading(true);
       const templateData = {
         name,
-        specimenType,
-        specimenSource,
+        description,
         createdAt: serverTimestamp(),
       };
-      await addDoc(collection(db, "specimenTemplates"), templateData);
-      handleCloseAddTemplateDialog();
+      await addDoc(collection(db, "specimenTemplates"), templateData).then(
+        function () {
+          // console.log("Frank created");
+          handleCloseAddTemplateDialog();
+          setLoading(false);
+        }
+        );
+        // handleCloseAddTemplateDialog();
     } catch (error) {
       console.error("Error adding template:", error);
+    }
+
+    // setLoading(false);
+  };
+
+  const handleDeleteTemplate = async (templateId) => {
+    setDeleteLoading(true); // Show delete loader
+    try {
+      await deleteDoc(doc(db, "specimenTemplates", templateId));
+      setTemplates(templates.filter((template) => template.id !== templateId)); // Update local state
+      setOpenSnackbar(true); // Show success snackbar
+      setSnackbarMsg("Template deleted successfully!");
+    } catch (error) {
+      console.error("Error deleting template:", error);
+      setOpenSnackbar(true); // Show error snackbar
+      setSnackbarMsg("Error deleting template. Please try again.");
     } finally {
-      setLoading(false);
+      setDeleteLoading(false); // Hide delete loader
     }
   };
+
+  const handleSnackbarClose = (event, reason) => {
+    if (reason === "clickaway") {
+      return;
+    }
+    setOpenSnackbar(false);
+  };
+
 
   return (
     <div style={{ width: "100%" }}>
@@ -164,33 +199,22 @@ const SpecimenTemplates = () => {
             fullWidth
           />
           <TextField
-            error={specimenType === ""}
+            error={description === ""}
             style={{ marginBottom: "10px" }}
             label="Specimen Type"
-            value={specimenType}
-            onChange={(e) => setSpecimenType(e.target.value)}
-            fullWidth
-          />
-          <TextField
-            error={specimenSource === ""}
-            style={{ marginBottom: "10px" }}
-            label="Specimen Source"
-            value={specimenSource}
-            onChange={(e) => setSpecimenSource(e.target.value)}
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
             fullWidth
           />
         </DialogContent>
         <DialogActions>
           <Button onClick={handleCloseAddTemplateDialog}>Cancel</Button>
           <Button
-            disabled={
-              name.trim() === "" ||
-              specimenType.trim() === "" ||
-              specimenSource.trim() === ""
-            }
+            disabled={name.trim() === "" || description.trim() === ""}
             onClick={handleSaveTemplate}
           >
-            {loading ? <CircularProgress size={24} /> : "Save"}
+            {/* {loading ? <CircularProgress size={24} /> : "Save"} */}
+            {loading ? null : "Save"}
           </Button>
         </DialogActions>
       </Dialog>
@@ -213,13 +237,24 @@ const SpecimenTemplates = () => {
                       {template.name}
                     </Typography>
                     <Typography variant="body2">
-                      Specimen Type: {template.specimenType}
+                      {template.description}
                     </Typography>
-                    <Typography variant="body2">
-                      Specimen Source: {template.specimenSource}
-                    </Typography>
+
                     {/* You can add more content to the card based on your template data */}
                   </CardContent>
+                  <CardActions>
+                    <IconButton
+                      // sx={{ position: "absolute", top: 10, right: 10 }}
+                      onClick={() => handleDeleteTemplate(template.id)}
+                      disabled={deleteLoading} // Disable button while deleting
+                    >
+                      {deleteLoading ? (
+                        <CircularProgress size={24} /> // Show loader during delete
+                      ) : (
+                        <Delete color="error" /> // Replace with your preferred delete icon
+                      )}
+                    </IconButton>
+                  </CardActions>
                 </Card>
               </Grid>
             ))}
@@ -230,6 +265,13 @@ const SpecimenTemplates = () => {
           </p>
         )}
       </div>
+      <Snackbar
+        open={openSnackbar}
+        autoHideDuration={2000}
+        onClose={handleSnackbarClose}
+        message={snackbarMsg}
+        // action={action}
+      />
     </div>
   );
 };

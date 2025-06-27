@@ -22,11 +22,16 @@ import {
   createBrowserRouter,
   Navigate,
   useNavigate,
+  Link,
 } from "react-router-dom";
+import dayjs from "dayjs";
+import ResultAuthorised from "./ResultAuthorised";
+import MyBookings from "./MyBookings";
+import Chip from "@mui/material/Chip";
 
-const BookingsTable = ({ bookings, isCurrent }) => {
+const BookingsTable = ({ bookings, role }) => {
   const theme = useTheme();
-const navigate = useNavigate();
+  const navigate = useNavigate();
 
   const StyledTableCell = styled(TableCell)(({ theme }) => ({
     [`&.${tableCellClasses.head}`]: {
@@ -51,16 +56,17 @@ const navigate = useNavigate();
                 }}
               >
                 {/* Define table headers based on your schema */}
+                <StyledTableCell>S. No</StyledTableCell>
+                <StyledTableCell>Booking Date</StyledTableCell>
                 <StyledTableCell>Patient Name</StyledTableCell>
                 <StyledTableCell>Age</StyledTableCell>
                 <StyledTableCell>Sex</StyledTableCell>
-                <StyledTableCell>Referral Doctor</StyledTableCell>
+                <StyledTableCell>Referring Doctor</StyledTableCell>
                 <StyledTableCell>Phone</StyledTableCell>
                 <StyledTableCell>Hospital</StyledTableCell>
-                <StyledTableCell>Date</StyledTableCell>
                 <StyledTableCell>Clinical Diagnosis</StyledTableCell>
-                <StyledTableCell>Clinical History</StyledTableCell>
-                <StyledTableCell>Specimen Type</StyledTableCell>
+                {/* <StyledTableCell>Clinical History</StyledTableCell> */}
+                <StyledTableCell>Booked Test</StyledTableCell>
                 <StyledTableCell>Status</StyledTableCell>
               </TableRow>
             </TableHead>
@@ -68,6 +74,7 @@ const navigate = useNavigate();
               {bookings.map((booking) => (
                 <TableRow
                   sx={{
+                    // fontSize: "5px",
                     cursor: "pointer",
                     // "&.MuiTableRow-hover": {
                     //   background: theme.palette.secondary.main,
@@ -77,25 +84,54 @@ const navigate = useNavigate();
                     },
                   }}
                   hover
-                  onClick={() => navigate(`/bookings/${booking.id}`)}
+                  onClick={() =>
+                    role !== "thirdparty"
+                      ? navigate(`/bookings/${booking.id}`)
+                      : navigate(`/myBookings/${booking.id}`, {
+                          state: booking,
+                        })
+                  }
                 >
                   {/* Extract and display data from each booking object */}
-                  <TableCell>{booking.patientName}</TableCell>
-                  <TableCell>{booking.age}</TableCell>
-                  <TableCell>{booking.sex}</TableCell>
-                  <TableCell>{booking.referralDoctor.name}</TableCell>
-                  <TableCell>{booking.phone}</TableCell>
-                  <TableCell>{booking.hospital.name}</TableCell>
-                  <TableCell>{booking.date}</TableCell>
-                  <TableCell>{booking.clinicalDiagnosis}</TableCell>
-                  <TableCell>{booking.clinicalHistory}</TableCell>
-                  <TableCell>
+                  <TableCell style={{ fontSize: "10px", fontWeight: "900" }}>
+                    {booking.serialNumber}
+                  </TableCell>
+                  <TableCell style={{ fontSize: "10px" }}>
+                    {booking.bookingDate}
+                  </TableCell>
+                  <TableCell style={{ fontSize: "10px" }}>
+                    {booking.patientName}
+                  </TableCell>
+                  <TableCell style={{ fontSize: "10px" }}>
+                    {booking.age}
+                  </TableCell>
+                  <TableCell style={{ fontSize: "10px" }}>
+                    {booking.sex}
+                  </TableCell>
+                  <TableCell style={{ fontSize: "10px" }}>
+                    {booking.referralDoctor.name}
+                  </TableCell>
+                  <TableCell style={{ fontSize: "10px" }}>
+                    {booking.phone}
+                  </TableCell>
+                  <TableCell style={{ fontSize: "10px" }}>
+                    {booking.hospital.name}
+                  </TableCell>
+                  <TableCell style={{ fontSize: "10px" }}>
+                    {booking.clinicalDiagnosis}
+                  </TableCell>
+                  {/* <TableCell style={{ fontSize: "10px" }}>{booking.clinicalHistory}</TableCell> */}
+                  <TableCell style={{ fontSize: "10px" }}>
                     {booking.typeOfSpecimen
                       ? `${booking.typeOfSpecimen.category} - ${booking.typeOfSpecimen.subcategory} - ${booking.typeOfSpecimen.itemName}`
                       : "-"}
                   </TableCell>
-                  <TableCell>
-                    {booking.isCompleted ? "Completed" : "Pending"}
+                  <TableCell style={{ fontSize: "10px" }}>
+                    {booking.isCompleted ? (
+                      <Chip label="Completed" color="success" />
+                    ) : (
+                      <Chip label="Pending" color="warning" />
+                    )}
                   </TableCell>
                 </TableRow>
               ))}

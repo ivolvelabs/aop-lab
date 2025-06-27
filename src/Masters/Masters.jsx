@@ -9,8 +9,8 @@ const Masters = () => {
   const [activeTab, setActiveTab] = useState(0); // Set initial active tab
 
   const tabs = [
-    { label: "Categories", component: <Categories /> },
-    { label: "Subcategories", component: <SubCategories /> },
+    { label: "Pathology Test Category", component: <Categories /> },
+    { label: "Specimen Type", component: <SubCategories /> },
     { label: "Item Names", component: <ItemNames /> },
   ];
 
