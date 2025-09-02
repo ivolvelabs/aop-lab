@@ -247,6 +247,7 @@ const ThirdPartyHospitals = () => {
             fullWidth
           />
           <TextField
+            error={password === ""}
             style={{ marginBottom: "10px" }}
             label="Email"
             value={email}
