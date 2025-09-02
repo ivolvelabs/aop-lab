@@ -115,7 +115,7 @@ const BookingsTable = ({ bookings, role }) => {
                     {booking.phone}
                   </TableCell>
                   <TableCell style={{ fontSize: "10px" }}>
-                    {booking.hospital.name}
+                    {booking.hospital?.name}
                   </TableCell>
                   <TableCell style={{ fontSize: "10px" }}>
                     {booking.clinicalDiagnosis}
