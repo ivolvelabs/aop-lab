@@ -99,9 +99,12 @@ let location = useLocation();
               <p>
                 <span>Date of Receipt: </span>
                 <b>
-                  {new Date(bookingData.bookingDate).toLocaleDateString(
-                    "en-GB"
-                  )}
+                  {bookingData.bookingDate.toDate().toLocaleString("en-IN", {
+                    day: "2-digit",
+                    month: "2-digit",
+                    year: "numeric",
+                    timeZone: "Asia/Kolkata",
+                  })}
                 </b>
               </p>
             </div>
@@ -121,7 +124,12 @@ let location = useLocation();
                 <b>
                   {new Date(
                     bookingData.statesInfo[3].updatedAt
-                  ).toLocaleDateString("en-GB")}
+                  ).toLocaleString("en-IN", {
+                    day: "2-digit",
+                    month: "2-digit",
+                    year: "numeric",
+                    timeZone: "Asia/Kolkata",
+                  })}
                 </b>
               </p>
             </div>

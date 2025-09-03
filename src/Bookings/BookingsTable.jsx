@@ -98,8 +98,8 @@ const BookingsTable = ({ bookings, role }) => {
                   <TableCell style={{ fontSize: "10px" }}>
                     {console.log(booking.bookingDate.toDate())}
                     {booking.bookingDate.toDate().toLocaleString("en-IN", {
-            day: "numeric",
-            month: "long",
+            day: "2-digit",
+            month: "2-digit",
             year: "numeric",
             timeZone: "Asia/Kolkata",
           })}

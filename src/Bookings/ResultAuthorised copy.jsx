@@ -10,9 +10,9 @@ import { html2pdf } from "html2pdf.js";
 function ResultAuthorised({ bookingData, handleUpdateStatesInfo, statesInfo }) {
   const theme = useTheme();
 
-const getPageMargins = () => {
-  return `@page { margin: ${"0cm"} ${"0cm"} ${"0"} ${"0cm"} !important;}`;
-};
+  const getPageMargins = () => {
+    return `@page { margin: ${"0cm"} ${"0cm"} ${"0"} ${"0cm"} !important;}`;
+  };
 
   const pageStyle = {
     width: "210mm",
@@ -55,7 +55,6 @@ const getPageMargins = () => {
     }
   };
 
-
   const Report = () => {
     return (
       <div style={pageStyle}>
@@ -69,7 +68,6 @@ const getPageMargins = () => {
             fontFamily: "Verdana",
             overflowWrap: "break-word",
             textAlign: "justify",
-            
           }}
         >
           <style>{getPageMargins()}</style>
@@ -92,9 +90,7 @@ const getPageMargins = () => {
             <img src="/footer.png" alt="Dr. Avani's Oncopath Lab Footer" />
           </footer>
 
-          <div
-          >
-
+          <div>
             <h1
               style={{
                 textAlign: "center",
@@ -171,9 +167,14 @@ const getPageMargins = () => {
                 <p>
                   <span>Date of Reporting:</span>
                   <b>
-                    {new Date(
-                      bookingData.statesInfo[3].updatedAt
-                    ).toLocaleDateString("en-GB")}
+                    {bookingData.statesInfo[3].updatedAt
+                      .toDate()
+                      .toLocaleString("en-IN", {
+                        day: "numeric",
+                        month: "long",
+                        year: "numeric",
+                        timeZone: "Asia/Kolkata",
+                      })}
                   </b>
                 </p>
               </div>
@@ -270,14 +271,11 @@ const getPageMargins = () => {
 
   const contentToPrint = useRef(null);
   const handlePrint = useReactToPrint({
-   
     documentTitle: `${bookingData.serialNumber} - ${bookingData.patientName}`,
     onBeforePrint: () => console.log("before printing..."),
     onAfterPrint: () => console.log("after printing..."),
     removeAfterPrint: true,
   });
-
-
 
   return (
     <div>
@@ -304,8 +302,6 @@ const getPageMargins = () => {
               disabled={!bookingData.isCompleted}
               onClick={() => {
                 handlePrint(null, () => contentToPrint.current);
-                
-                
               }}
               style={{ padding: "10px 20px" }}
             >
@@ -313,11 +309,7 @@ const getPageMargins = () => {
               {isLoading && <CircularProgress size="small" />}
             </Button>
 
-
-            <Button
-              variant="outlined"
-              onClick={handleAuthorise}
-            >
+            <Button variant="outlined" onClick={handleAuthorise}>
               Authorise
             </Button>
           </div>

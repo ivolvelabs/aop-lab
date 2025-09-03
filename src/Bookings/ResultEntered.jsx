@@ -166,7 +166,7 @@ const ResultEntered = ({ bookingData, statesInfo, handleUpdateStatesInfo }) => {
           return {
             ...state,
             isDone: true,
-            updatedAt: new Date().toString(),
+            updatedAt: new Date(),
           };
         }
         return state;

@@ -57,7 +57,15 @@ const Received = ({ bookingData }) => {
           <ListItem>
             <ListItemText
               primary="Date:"
-              secondary={bookingData?.bookingDate}
+              secondary={
+                bookingData?.bookingDate &&
+                bookingData.bookingDate.toDate().toLocaleString("en-IN", {
+                  day: "2-digit",
+                  month: "2-digit",
+                  year: "numeric",
+                  timeZone: "Asia/Kolkata",
+                })
+              }
             />
           </ListItem>
           <ListItem>

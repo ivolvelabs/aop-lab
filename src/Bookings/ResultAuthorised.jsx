@@ -47,7 +47,7 @@ const getCss = () => {
         if (state.state === "resultAuthorized") {
           return {
             ...state,
-            updatedAt: new Date().toString(),
+            updatedAt: new Date(),
           };
         }
         return state;
@@ -91,7 +91,7 @@ const getCss = () => {
           <div className="header">
             <img src="/header.png" alt="Dr. Avani's Oncopath Lab Header" />
           </div>
-          
+
           <div className="footer">
             <img src="/footer.png" alt="Dr. Avani's Oncopath Lab Footer" />
           </div>
@@ -163,12 +163,16 @@ const getCss = () => {
                       </p>
                       <p>
                         <span>Date of Receipt: </span>
-                        {/* <b>
-                          {new Date(bookingData.bookingDate).toLocaleDateString(
-                            "en-GB"
-                          )}
-                        </b> */}
-                          <b>{bookingData.bookingDate.toLocaleDateString("en-GB")}</b>
+                        <b>
+                          {bookingData.bookingDate
+                            .toDate()
+                            .toLocaleString("en-IN", {
+                              day: "2-digit",
+                              month: "2-digit",
+                              year: "numeric",
+                              timeZone: "Asia/Kolkata",
+                            })}
+                        </b>
                       </p>
                     </div>
                     <div
@@ -185,9 +189,14 @@ const getCss = () => {
                       <p>
                         <span>Date of Reporting:</span>
                         <b>
-                          {new Date(
-                            bookingData.statesInfo[3].updatedAt
-                          ).toLocaleDateString("en-GB")}
+                          {bookingData.statesInfo[3].updatedAt
+                            .toDate()
+                            .toLocaleString("en-IN", {
+                              day: "2-digit",
+                              month: "2-digit",
+                              year: "numeric",
+                              timeZone: "Asia/Kolkata",
+                            })}
                         </b>
                       </p>
                     </div>
