@@ -34,6 +34,7 @@ import {
   setDoc,
   updateDoc,
   where,
+  runTransaction,
 } from "firebase/firestore";
 import { db } from "../firebase"; // Assuming your Firestore instance is imported here
 import BookingsTable from "./BookingsTable";
@@ -113,31 +114,88 @@ const CurrentBookings = () => {
     });
   };
 
-const handleReportNumber = async(value) => {
-  const year = new Date().getFullYear().toString().substring(2);
-  console.log(year);
-  console.log(year === value.crnYear);
-  if (year === value.crnYear) {
-    setReportNumber(`${value.crnSeries}/${value.crnYear}/${Number(value.crNumber) + 1}`);
-  console.log(
-    `${value.crnSeries}/${value.crnYear}/${Number(value.crNumber) + 1}`
-  );
-  }
-  else {
-    const catRef = doc(db, "categories", where("name", "==", value.name));
-    await updateDoc(catRef, {
-      years: [
-        {
-          year: year,
-          rnSeries: `AOP/${value.name.substring(0, 1).toUpperCase()}/${year}`,
-          crNumber: 0,
-        },
-      ],
-    });
-    setReportNumber(`${value.crnSeries}/${year}/${Number(value.crNumber) + 1}`);
+const handleReportNumber = async (value) => {
+  // value = { id, name, years: [{ rnSeries, crNumber, year }] }
+  const currentYear = new Date().getFullYear().toString().slice(-2); // "25"
+  const docRef = doc(db, "categories", value.id);
 
+  try {
+    const reportNumber = await runTransaction(db, async (tx) => {
+      const snap = await tx.get(docRef);
+      if (!snap.exists()) throw new Error("Category not found");
+
+      const data = snap.data() || {};
+      const years = Array.isArray(data.years) ? data.years : [];
+
+      // Find current year entry (e.g., "25")
+      const idx = years.findIndex((y) => String(y.year) === currentYear);
+
+      if (idx >= 0) {
+        // Increment existing year counter
+        const entry = years[idx];
+        const nextCr = Number(entry.crNumber || 0) + 1;
+        const rnSeries = entry.rnSeries; // keep existing series
+        const updated = [...years];
+        updated[idx] = { ...entry, crNumber: nextCr };
+
+        tx.update(docRef, { years: updated });
+
+        return `${rnSeries}/${nextCr}`;
+      } else {
+        // Create new year entry
+        const prefixLetter =
+          (value.name || "").trim().charAt(0).toUpperCase() || "X"; // fallback
+        const rnSeries = `AOP/${prefixLetter}/${currentYear}`;
+        const nextCr = 1;
+        const updated = [
+          ...years,
+          { year: currentYear, rnSeries, crNumber: 0 }, // store 0; we display 1
+        ];
+
+        tx.update(docRef, { years: updated });
+
+        return `${rnSeries}/${nextCr}`;
+      }
+    });
+
+    await setReportNumber(reportNumber);
+    console.log("Report #", reportNumber);
+    return reportNumber
+  } catch (err) {
+    console.error("Failed to compute report number:", err);
   }
-}
+};
+
+
+
+// const handleReportNumber = async(value) => {
+//   console.log(value);
+//   const year = new Date().getFullYear().toString().substring(2);
+//   console.log(year);
+//   console.log(year === value.years.year);
+//   if (year === value.years.year) {
+//     setReportNumber(
+//       `${value.years.rnSeries}/${value.years.year}/${Number(value.years.crNumber) + 1}`
+//     );
+//     console.log(
+//       `${value.years.rnSeries}/${value.years.year}/${
+//         Number(value.years.crNumber) + 1
+//       }`
+//     );
+//   } else {
+//     const catRef = doc(db, "categories", where("name", "==", value.name));
+//     await updateDoc(catRef, {
+//       years: [
+//         {
+//           year: year,
+//           rnSeries: `AOP/${value.name.substring(0, 1).toUpperCase()}/${year}`,
+//           crNumber: 0,
+//         },
+//       ],
+//     });
+//     setReportNumber(`${value.crnSeries}/${year}/${Number(value.crNumber) + 1}`);
+//   }
+// }
 
 
   // Function to handle selection changes
@@ -190,8 +248,8 @@ const handleReportNumber = async(value) => {
     // const year = new Date().getFullYear().toString().substring(2);
     setSelectedCategory(value);
     fetchSubcategories(value.id);
-    handleReportNumber(value);
-    // console.log(value);
+    // handleReportNumber(value);
+    console.log(value);
     // console.log(`AOP/${value.name.substring(0, 3).toUpperCase()}/${year}/${Number(value.crn) + 1}`);
     // setCrn(
     //   `AOP/${value.name.substring(0, 1).toUpperCase()}/${year}/${
@@ -297,6 +355,7 @@ await addDoc(itemRef, {
   createdAt: serverTimestamp(),
 });
 
+const serial = await handleReportNumber(selectedCategory);
 
       const statesInfo = [
         {
@@ -340,7 +399,7 @@ await addDoc(itemRef, {
         isCompleted: false,
         createdAt: serverTimestamp(),
         statesInfo,
-        // serialNumber: crn,
+        serialNumber: serial,
         id: docRef.id,
         typeOfSpecimen: {
           category: selectedCategory.name,
@@ -356,7 +415,6 @@ await addDoc(itemRef, {
       await setDoc(docRef, bookingData);
       
       setBookings((prevBookings) => [bookingData, ...prevBookings]);
-
       // Handle success
       await setIsLoading(false);
       await handleClose();

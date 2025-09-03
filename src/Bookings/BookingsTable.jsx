@@ -96,8 +96,7 @@ const BookingsTable = ({ bookings, role }) => {
                     {booking?.serialNumber}
                   </TableCell>
                   <TableCell style={{ fontSize: "10px" }}>
-                    {console.log(booking.bookingDate.toDate())}
-                    {booking.bookingDate.toDate().toLocaleString("en-IN", {
+                    {(booking.bookingDate.toDate ? booking.bookingDate.toDate() : booking.bookingDate).toLocaleString("en-IN", {
             day: "2-digit",
             month: "2-digit",
             year: "numeric",
