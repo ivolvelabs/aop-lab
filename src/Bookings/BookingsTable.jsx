@@ -92,12 +92,17 @@ const BookingsTable = ({ bookings, role }) => {
                         })
                   }
                 >
-                  {/* Extract and display data from each booking object */}
                   <TableCell style={{ fontSize: "10px", fontWeight: "900" }}>
-                    {booking.serialNumber}
+                    {booking?.serialNumber}
                   </TableCell>
                   <TableCell style={{ fontSize: "10px" }}>
-                    {booking.bookingDate}
+                    {console.log(booking.bookingDate.toDate())}
+                    {booking.bookingDate.toDate().toLocaleString("en-IN", {
+            day: "numeric",
+            month: "long",
+            year: "numeric",
+            timeZone: "Asia/Kolkata",
+          })}
                   </TableCell>
                   <TableCell style={{ fontSize: "10px" }}>
                     {booking.patientName}
