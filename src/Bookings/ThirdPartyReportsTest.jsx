@@ -3,8 +3,6 @@ import {
   Box,
   TextField,
   Button,
-  Typography,
-  IconButton,
   InputAdornment,
   CircularProgress,
   DialogActions,
@@ -21,14 +19,11 @@ import {
   Radio,
 } from "@mui/material";
 import Autocomplete, { createFilterOptions } from "@mui/material/Autocomplete";
-import SearchIcon from "@mui/icons-material/Search";
 import {
-  addDoc,
   collection,
   doc,
   getDoc,
   getDocs,
-  orderBy,
   query,
   serverTimestamp,
   setDoc,
@@ -46,6 +41,20 @@ import { useAuth } from "../Contexts/AuthContext";
 
 const filter = createFilterOptions();
 
+const initialBookingData = {
+  patientName: "",
+  age: "",
+  sex: "",
+  referralDoctor: [],
+  phone: "",
+  hospital: [],
+  bookingDate: "",
+  clinicalDiagnosis: "",
+  clinicalHistory: "",
+  additionalInfo: [],
+  typeOfSpecimen: {},
+};
+
 const ThirdPartyReportsTest = () => {
   const [bookings, setBookings] = useState([]);
   const [doctors, setDoctors] = useState([]);
@@ -55,7 +64,7 @@ const ThirdPartyReportsTest = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [isLoading, setIsLoading] = useState(true); // Added loading state
   const [open, setOpen] = useState(false);
-  const [newBookingData, setNewBookingData] = useState([]);
+  const [newBookingData, setNewBookingData] = useState(initialBookingData);
   const [categories, setCategories] = useState([]);
   const [subcategories, setSubcategories] = useState([]);
   const [itemNames, setItemNames] = useState([]);
@@ -70,20 +79,6 @@ const { role, user } = useAuth();
 
 
 
-  const fetchPrn = async () => {
-    const prnRef = doc(db, "metaData", "metaDataDetails");
-    const prnData = await getDoc(prnRef);
-    const prnumber = prnData.data().prevReportNumber;
-    // console.log(`${prnumber}`);
-    console.log(
-      "-----------------------------------------------" +
-        prnumber.substring(prnumber.lastIndexOf("/") + 1)
-    );
-
-    setPrn(prnumber.substring(prnumber.lastIndexOf("/") + 1));
-    return prnumber;
-  };
-
   const handleClickOpen = () => {
     setOpen(true);
   };
@@ -96,19 +91,7 @@ const { role, user } = useAuth();
     setSelectedSubcategory("");
     setSelectedItem("");
     setCrn("");
-    setNewBookingData({
-      patientName: "",
-      age: "",
-      sex: "",
-      referralDoctor: [],
-      phone: "",
-      hospital: [],
-      bookingDate: "",
-      clinicalDiagnosis: "",
-      clinicalHistory: "",
-      additionalInfo: [],
-      typeOfSpecimen: {},
-    });
+    setNewBookingData(initialBookingData);
   };
 
   // Function to handle form changes
@@ -119,14 +102,6 @@ const { role, user } = useAuth();
     });
   };
 
-  // Function to handle selection changes
-  const handleSelectDoctor = (singleDoctor) => {
-    setDoctor(singleDoctor);
-  };
-  const handleSelectHospital = (singleHospital) => {
-    setHospital(singleHospital);
-  };
-
   const handleChange = (event) => {
     setNewBookingData({
       ...newBookingData,
@@ -134,48 +109,10 @@ const { role, user } = useAuth();
     });
   };
 
-  const fetchHospitalsAndDoctors = async () => {
-    try {
-      const hospitalsQuery = query(
-        collection(db, "thirdparty"),
-        where("type", "==", "hospital"),
-        where("email", "==", user.email)
-      );
-      const doctorsQuery = query(
-        collection(db, "thirdparty"),
-        where("type", "==", "doctor")
-      );
-
-      const hospitalsSnapshot = await getDocs(hospitalsQuery);
-      const doctorsSnapshot = await getDocs(doctorsQuery);
-
-      const hospitals = hospitalsSnapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-      }));
-      const doctors = doctorsSnapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-      }));
-
-      // Set the fetched data to state or use it as needed
-      setHospitals(hospitals);
-      setDoctors(doctors);
-    } catch (error) {
-      console.error("Error fetching hospitals and doctors:", error);
-    }
-  };
-
   const handleCategoryChange = (value) => {
     const year = new Date().getFullYear().toString().substring(2);
     setSelectedCategory(value);
     fetchSubcategories(value.id);
-    console.log(prn);
-    console.log(
-      `AOP/${value.name.substring(0, 3).toUpperCase()}/${year}/${
-        Number(prn) + 1
-      }`
-    );
     setCrn(
       `AOP/${value.name.substring(0, 1).toUpperCase()}/${year}/${
         Number(prn) + 1
@@ -186,26 +123,10 @@ const { role, user } = useAuth();
   const handleSubcategoryChange = (value) => {
     setSelectedSubcategory(value);
     fetchItemNames(value.id);
-    console.log(crn);
   };
 
   const handleItemNameChange = (value) => {
     setSelectedItem(value);
-  };
-
-  const fetchCategories = async () => {
-    try {
-      const categoriesQuery = collection(db, "categories");
-      const categoriesSnapshot = await getDocs(categoriesQuery);
-      setCategories(
-        categoriesSnapshot.docs.map((doc) => ({
-          id: doc.id,
-          ...doc.data(),
-        }))
-      );
-    } catch (error) {
-      console.error("Error fetching categories:", error);
-    }
   };
 
   const fetchSubcategories = async (id) => {
@@ -252,12 +173,59 @@ const { role, user } = useAuth();
     }
   };
 
-  // Call the fetch functions in your component's effect or when needed
   useEffect(() => {
-    fetchPrn();
-    fetchHospitalsAndDoctors();
-    fetchCategories();
-  }, []);
+    const bootstrapFormData = async () => {
+      try {
+        const prnRef = doc(db, "metaData", "metaDataDetails");
+        const prnData = await getDoc(prnRef);
+        const prnumber = prnData.data()?.prevReportNumber || "";
+        if (prnumber) {
+          setPrn(prnumber.substring(prnumber.lastIndexOf("/") + 1));
+        }
+
+        if (user?.email) {
+          const hospitalsQuery = query(
+            collection(db, "thirdparty"),
+            where("type", "==", "hospital"),
+            where("email", "==", user.email)
+          );
+          const hospitalsSnapshot = await getDocs(hospitalsQuery);
+          setHospitals(
+            hospitalsSnapshot.docs.map((hospitalDoc) => ({
+              id: hospitalDoc.id,
+              ...hospitalDoc.data(),
+            }))
+          );
+        } else {
+          setHospitals([]);
+        }
+
+        const doctorsQuery = query(
+          collection(db, "thirdparty"),
+          where("type", "==", "doctor")
+        );
+        const doctorsSnapshot = await getDocs(doctorsQuery);
+        setDoctors(
+          doctorsSnapshot.docs.map((doctorDoc) => ({
+            id: doctorDoc.id,
+            ...doctorDoc.data(),
+          }))
+        );
+
+        const categoriesSnapshot = await getDocs(collection(db, "categories"));
+        setCategories(
+          categoriesSnapshot.docs.map((categoryDoc) => ({
+            id: categoryDoc.id,
+            ...categoryDoc.data(),
+          }))
+        );
+      } catch (error) {
+        console.error("Error loading form data:", error);
+      }
+    };
+
+    bootstrapFormData();
+  }, [user?.email]);
 
   const handleAddBooking = async () => {
     const docRef = doc(collection(db, "bookings"));
@@ -326,7 +294,7 @@ const { role, user } = useAuth();
       // Handle success
       await setIsLoading(false);
       await handleClose();
-      console.log("Booking added successfully with ID:", docRef.id);
+      // Booking created successfully.
     } catch (error) {
       // Handle errors gracefully
       console.error("Error adding booking:", error);
@@ -336,6 +304,7 @@ const { role, user } = useAuth();
 
   useEffect(() => {
     const fetchBookings = async () => {
+      if (!user?.email) return;
       try {
         setIsLoading(true); // Set loading to true before fetching
         const q = query(
@@ -357,7 +326,7 @@ const { role, user } = useAuth();
     };
 
     fetchBookings();
-  }, []);
+  }, [user?.email]);
 
   const handleSearch = (event) => {
     setSearchQuery(event.target.value);

@@ -1,70 +1,55 @@
-# Getting Started with Create React App
+# AOP Lab
 
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+React app for Avnis Oncopathology Lab operations, including bookings, masters, templates, reports, third-party workflows, users, permissions, and printing/report generation.
 
-## Available Scripts
+## Tech Stack
 
-In the project directory, you can run:
+- React 18
+- Vite for dev/build
+- React Router
+- Firebase
+- MUI and Tailwind
+- PDF/print/report tooling
+- Existing `react-scripts` test runner
 
-### `npm start`
+## Prerequisites
 
-Runs the app in the development mode.\
-Open [http://localhost:3000](http://localhost:3000) to view it in your browser.
+- Node.js `24.12.0` via `.nvmrc` (`^20.19.0 || >=22.12.0` is required by the locked Vite version).
+- npm.
+- Installed dependencies with `npm install`.
+- Required Firebase/environment values in local env files or deployment config. Do not commit secrets.
 
-The page will reload when you make changes.\
-You may also see any lint errors in the console.
+## Commands
 
-### `npm test`
+```bash
+npm install
+npm start
+npm run build
+npm test -- --watchAll=false
+npm run test:ci
+npm run preview
+```
 
-Launches the test runner in the interactive watch mode.\
-See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
+`npm start` runs the Vite dev server. `npm run build` creates the production build in `dist/`.
 
-### `npm run build`
+## Agent/Developer Docs
 
-Builds the app for production to the `build` folder.\
-It correctly bundles React in production mode and optimizes the build for the best performance.
+- `AGENTS.md`: primary Codex instructions for this repo.
+- `CODEX_WORKFLOW.md`: practical workflow playbook.
+- `AGENTIC_CODING_BASELINE_2026-04-25.md`: current OpenAI/Codex research baseline used to refresh the agent instructions.
+- `PROJECT_AUDIT_2026-02-25.md`: app risk audit and phased optimization plan.
 
-The build is minified and the filenames include the hashes.\
-Your app is ready to be deployed!
+## High-Risk Areas
 
-See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
+Review `PROJECT_AUDIT_2026-02-25.md` before changing:
+- booking lifecycle screens
+- report/template rendering
+- auth and role-based routing
+- Firestore write flows
+- date formatting/filtering/printing logic
 
-### `npm run eject`
+## Validation Guidance
 
-**Note: this is a one-way operation. Once you `eject`, you can't go back!**
-
-If you aren't satisfied with the build tool and configuration choices, you can `eject` at any time. This command will remove the single build dependency from your project.
-
-Instead, it will copy all the configuration files and the transitive dependencies (webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you're on your own.
-
-You don't have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn't feel obligated to use this feature. However we understand that this tool wouldn't be useful if you couldn't customize it when you are ready for it.
-
-## Learn More
-
-You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
-
-To learn React, check out the [React documentation](https://reactjs.org/).
-
-### Code Splitting
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/code-splitting](https://facebook.github.io/create-react-app/docs/code-splitting)
-
-### Analyzing the Bundle Size
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size](https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size)
-
-### Making a Progressive Web App
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app](https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app)
-
-### Advanced Configuration
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/advanced-configuration](https://facebook.github.io/create-react-app/docs/advanced-configuration)
-
-### Deployment
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/deployment](https://facebook.github.io/create-react-app/docs/deployment)
-
-### `npm run build` fails to minify
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify](https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify)
+- Logic changes: run targeted tests when available.
+- UI/runtime changes: run `npm run build`.
+- Docs-only changes: verify commands, links, and file references.

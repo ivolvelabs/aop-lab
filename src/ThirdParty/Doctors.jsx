@@ -1,44 +1,72 @@
-import React, { useState, useEffect } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
-  CircularProgress,
+  Alert,
   Button,
+  CircularProgress,
   Dialog,
-  DialogTitle,
-  DialogContent,
   DialogActions,
-  TextField,
+  DialogContent,
+  DialogTitle,
+  FormControlLabel,
   InputAdornment,
-  Grid,
-  Card,
-  CardContent,
-  Typography,
+  Snackbar,
+  Stack,
+  Switch,
+  TextField,
 } from "@mui/material";
 import {
   collection,
-  addDoc,
-  getDocs,
+  doc,
   onSnapshot,
-  serverTimestamp,
   orderBy,
   query,
+  serverTimestamp,
+  updateDoc,
   where,
 } from "firebase/firestore";
-import { db } from "../firebase"; // Assuming your Firestore instance is imported here
 import { Search } from "@mui/icons-material";
-import { useTheme } from "@emotion/react";
+import { getFunctions, httpsCallable } from "firebase/functions";
+import { db } from "../firebase";
+import ThirdpartyTable from "./ThirdpartyTable";
 
-const Doctor = () => {
+const emptyForm = {
+  name: "",
+  email: "",
+  password: "",
+  phone: "",
+};
+
+const emptyCredentialForm = {
+  email: "",
+  password: "",
+};
+
+const isActiveRecord = (record) =>
+  record?.active !== false && !record?.archivedAt;
+
+const normalizeSearch = (value) => String(value || "").toLowerCase().trim();
+
+const Doctors = () => {
+  const functions = getFunctions();
+  const createThirdParty = httpsCallable(functions, "createThirdParty");
+  const attachThirdPartyLogin = httpsCallable(functions, "attachThirdPartyLogin");
+  const resetThirdPartyPassword = httpsCallable(functions, "resetThirdPartyPassword");
+  const setThirdPartyLoginAccess = httpsCallable(functions, "setThirdPartyLoginAccess");
+
   const [doctors, setDoctors] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [addDoctorDialogOpen, setAddDoctorDialogOpen] = useState(false);
-  const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
-  const [phone, setPhone] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [selectedDoctor, setSelectedDoctor] = useState(null);
+  const [form, setForm] = useState(emptyForm);
   const [searchTerm, setSearchTerm] = useState("");
+  const [showArchived, setShowArchived] = useState(false);
+  const [feedback, setFeedback] = useState(null);
+  const [credentialDialogOpen, setCredentialDialogOpen] = useState(false);
+  const [credentialMode, setCredentialMode] = useState("create");
+  const [credentialTarget, setCredentialTarget] = useState(null);
+  const [credentialForm, setCredentialForm] = useState(emptyCredentialForm);
 
-  const theme = useTheme();
-
-  // Fetch only doctors from the "thirdparty" collection with type "doctor"
   useEffect(() => {
     const q = query(
       collection(db, "thirdparty"),
@@ -47,196 +75,381 @@ const Doctor = () => {
     );
 
     const unsubscribe = onSnapshot(q, (querySnapshot) => {
-      const filteredDoctors = querySnapshot.docs.filter((doc) => {
-        const data = doc.data();
-        return data.name.toLowerCase().includes(searchTerm.toLowerCase());
-      });
-
-      setDoctors(filteredDoctors.map((doc) => ({ ...doc.data(), id: doc.id })));
-
+      setDoctors(querySnapshot.docs.map((item) => ({ ...item.data(), id: item.id })));
       setLoading(false);
     });
 
     return () => unsubscribe();
-  }, [searchTerm]);
+  }, []);
 
-  const handleSearch = (event) => {
-    setSearchTerm(event.target.value.toLowerCase());
+  const filteredDoctors = useMemo(() => {
+    const term = normalizeSearch(searchTerm);
+
+    return doctors.filter((doctor) => {
+      const active = isActiveRecord(doctor);
+      if (!showArchived && !active) return false;
+      if (!term) return true;
+
+      return [doctor.name, doctor.email, doctor.phone]
+        .map(normalizeSearch)
+        .some((value) => value.includes(term));
+    });
+  }, [doctors, searchTerm, showArchived]);
+
+  const updateForm = (field) => (event) => {
+    setForm((current) => ({ ...current, [field]: event.target.value }));
   };
 
-  const handleOpenAddDoctorDialog = () => {
-    setAddDoctorDialogOpen(true);
+  const openCreateDialog = () => {
+    setSelectedDoctor(null);
+    setForm(emptyForm);
+    setDialogOpen(true);
   };
 
-  const handleCloseAddDoctorDialog = () => {
-    setAddDoctorDialogOpen(false);
-    setName("");
-    setEmail("");
-    setPhone("");
+  const openEditDialog = (doctor) => {
+    setSelectedDoctor(doctor);
+    setForm({
+      name: doctor?.name || "",
+      email: doctor?.email || "",
+      password: "",
+      phone: doctor?.phone || "",
+    });
+    setDialogOpen(true);
   };
 
-  const handleSaveDoctor = async () => {
+  const closeDialog = () => {
+    setDialogOpen(false);
+    setSelectedDoctor(null);
+    setForm(emptyForm);
+  };
+
+  const openCredentialDialog = (doctor, mode) => {
+    setCredentialTarget(doctor);
+    setCredentialMode(mode);
+    setCredentialForm({
+      email: doctor?.email || "",
+      password: "",
+    });
+    setCredentialDialogOpen(true);
+  };
+
+  const closeCredentialDialog = () => {
+    setCredentialDialogOpen(false);
+    setCredentialTarget(null);
+    setCredentialForm(emptyCredentialForm);
+  };
+
+  const updateCredentialForm = (field) => (event) => {
+    setCredentialForm((current) => ({
+      ...current,
+      [field]: event.target.value,
+    }));
+  };
+
+  const saveDoctor = async () => {
     try {
-      setLoading(true);
-      const doctorData = {
-        name,
-        email,
-        phone,
-        type: "doctor", // Explicitly set type
-        createdAt: serverTimestamp(),
-      };
+      setSaving(true);
 
-      await addDoc(collection(db, "thirdparty"), doctorData);
-      const updatedDoctors = await getDocs(
-        query(
-          collection(db, "thirdparty"),
-          where("type", "==", "doctor"),
-          orderBy("createdAt", "desc")
-        )
-      );
-      setDoctors(
-        updatedDoctors.docs.map((doc) => ({ ...doc.data(), id: doc.id }))
-      );
-      handleCloseAddDoctorDialog();
+      if (selectedDoctor) {
+        await updateDoc(doc(db, "thirdparty", selectedDoctor.id), {
+          name: form.name.trim(),
+          phone: form.phone.trim(),
+          updatedAt: serverTimestamp(),
+        });
+        setFeedback({ severity: "success", message: "Doctor updated." });
+      } else {
+        await createThirdParty({
+          name: form.name.trim(),
+          email: form.email.trim(),
+          password: form.password,
+          phone: form.phone.trim(),
+          role: "thirdparty",
+          type: "doctor",
+        });
+        setFeedback({
+          severity: "success",
+          message: "Doctor login account created.",
+        });
+      }
+
+      closeDialog();
     } catch (error) {
-      console.error("Error adding doctor:", error);
+      console.error("Error saving doctor:", error);
+      setFeedback({
+        severity: "error",
+        message: error?.message || "Doctor could not be saved.",
+      });
+    } finally {
+      setSaving(false);
     }
-    setLoading(false);
   };
+
+  const archiveDoctor = async (doctor) => {
+    try {
+      if (doctor.authUid && doctor.loginAccess !== false) {
+        await setThirdPartyLoginAccess({
+          thirdPartyId: doctor.id,
+          loginAccess: false,
+        });
+      }
+      await updateDoc(doc(db, "thirdparty", doctor.id), {
+        active: false,
+        archivedAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+      setFeedback({ severity: "success", message: "Doctor archived." });
+    } catch (error) {
+      console.error("Error archiving doctor:", error);
+      setFeedback({ severity: "error", message: "Doctor could not be archived." });
+    }
+  };
+
+  const saveCredentials = async () => {
+    if (!credentialTarget?.id) return;
+
+    try {
+      setSaving(true);
+
+      if (credentialMode === "create") {
+        await attachThirdPartyLogin({
+          thirdPartyId: credentialTarget.id,
+          email: credentialForm.email.trim(),
+          password: credentialForm.password,
+        });
+        setFeedback({ severity: "success", message: "Doctor login created." });
+      } else {
+        await resetThirdPartyPassword({
+          thirdPartyId: credentialTarget.id,
+          password: credentialForm.password,
+        });
+        setFeedback({ severity: "success", message: "Doctor password reset." });
+      }
+
+      closeCredentialDialog();
+    } catch (error) {
+      console.error("Error saving doctor credentials:", error);
+      setFeedback({
+        severity: "error",
+        message: error?.message || "Doctor credentials could not be saved.",
+      });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const toggleDoctorLogin = async (doctor, loginAccess) => {
+    try {
+      setSaving(true);
+      await setThirdPartyLoginAccess({
+        thirdPartyId: doctor.id,
+        loginAccess,
+      });
+      setFeedback({
+        severity: "success",
+        message: loginAccess ? "Doctor login enabled." : "Doctor login disabled.",
+      });
+    } catch (error) {
+      console.error("Error updating doctor login access:", error);
+      setFeedback({
+        severity: "error",
+        message: error?.message || "Doctor login access could not be updated.",
+      });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const restoreDoctor = async (doctor) => {
+    try {
+      await updateDoc(doc(db, "thirdparty", doctor.id), {
+        active: true,
+        archivedAt: null,
+        updatedAt: serverTimestamp(),
+      });
+      setFeedback({ severity: "success", message: "Doctor restored." });
+    } catch (error) {
+      console.error("Error restoring doctor:", error);
+      setFeedback({ severity: "error", message: "Doctor could not be restored." });
+    }
+  };
+
+  const isEdit = Boolean(selectedDoctor);
+  const canSave =
+    form.name.trim() !== "" &&
+    form.phone.trim() !== "" &&
+    (isEdit || (form.email.trim() !== "" && form.password.trim() !== ""));
 
   return (
     <div style={{ width: "100%" }}>
-      <div
-        style={{
-          display: "flex",
-          width: "100%",
-          flexDirection: "row",
-          justifyContent: "center",
-          alignItems: "center",
-          margin: "10px",
-        }}
+      <Stack
+        direction={{ xs: "column", md: "row" }}
+        spacing={2}
+        alignItems={{ xs: "stretch", md: "center" }}
+        sx={{ my: 2 }}
       >
-        <div
-          style={{
-            display: "flex",
-            flex: 1,
-            alignItems: "center",
-            justifyContent: "center",
+        <TextField
+          value={searchTerm}
+          onChange={(event) => setSearchTerm(event.target.value)}
+          type="search"
+          label="Search doctors"
+          fullWidth
+          size="small"
+          InputProps={{
+            startAdornment: (
+              <InputAdornment position="start">
+                <Search />
+              </InputAdornment>
+            ),
           }}
+        />
+        <FormControlLabel
+          control={
+            <Switch
+              checked={showArchived}
+              onChange={(event) => setShowArchived(event.target.checked)}
+            />
+          }
+          label="Show archived"
+          sx={{ whiteSpace: "nowrap" }}
+        />
+        <Button
+          variant="contained"
+          disabled={loading}
+          onClick={openCreateDialog}
+          sx={{ minWidth: 140 }}
         >
-          <TextField
-            value={searchTerm}
-            onChange={handleSearch}
-            type="search"
-            label="Search"
-            fullWidth
-            size="small"
-            InputProps={{
-              startAdornment: (
-                <InputAdornment position="start">
-                  <Search />
-                </InputAdornment>
-              ),
-            }}
-            sx={{ margin: "10px 0px" }}
-          />
-        </div>
-        <div
-          style={{
-            display: "flex",
-            flex: 1,
-            alignItems: "center",
-            justifyContent: "end",
-          }}
-        >
-          <Button
-            type="submit"
-            variant="contained"
-            color="primary"
-            disabled={loading}
-            onClick={handleOpenAddDoctorDialog}
-          >
-            {loading ? <CircularProgress size={24} /> : "Add Doctor"}
-          </Button>
-        </div>
-      </div>
+          {loading ? <CircularProgress size={24} color="inherit" /> : "Add Doctor"}
+        </Button>
+      </Stack>
 
-      <Dialog open={addDoctorDialogOpen} onClose={handleCloseAddDoctorDialog}>
-        <DialogTitle>Add Doctor</DialogTitle>
-        <DialogContent>
+      {loading ? (
+        <CircularProgress size={54} />
+      ) : (
+        <ThirdpartyTable
+          kind="doctor"
+          thirdParties={filteredDoctors}
+          onEdit={openEditDialog}
+          onArchive={archiveDoctor}
+          onRestore={restoreDoctor}
+          onCreateLogin={(doctor) => openCredentialDialog(doctor, "create")}
+          onResetPassword={(doctor) => openCredentialDialog(doctor, "reset")}
+          onToggleLogin={toggleDoctorLogin}
+        />
+      )}
+
+      <Dialog open={dialogOpen} onClose={closeDialog} fullWidth maxWidth="sm">
+        <DialogTitle>{isEdit ? "Edit Doctor" : "Add Doctor"}</DialogTitle>
+        <DialogContent sx={{ display: "flex", flexDirection: "column", gap: 2, pt: 1 }}>
           <TextField
-            error={name === ""}
-            style={{ marginBottom: "10px" }}
+            autoFocus
+            required
             label="Name"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
+            value={form.name}
+            onChange={updateForm("name")}
             fullWidth
           />
           <TextField
-            error={email === ""}
-            style={{ marginBottom: "10px" }}
+            required
             label="Email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
+            value={form.email}
+            onChange={updateForm("email")}
+            type="email"
             fullWidth
+            disabled={isEdit}
+            helperText={isEdit ? "Login email cannot be changed here." : ""}
           />
+          {!isEdit ? (
+            <TextField
+              required
+              label="Password"
+              value={form.password}
+              onChange={updateForm("password")}
+              type="password"
+              fullWidth
+            />
+          ) : null}
           <TextField
-            error={phone === ""}
-            style={{ marginBottom: "10px" }}
+            required
             label="Phone"
-            value={phone}
-            onChange={(e) => setPhone(e.target.value)}
+            value={form.phone}
+            onChange={updateForm("phone")}
             fullWidth
           />
         </DialogContent>
         <DialogActions>
-          <Button onClick={handleCloseAddDoctorDialog}>Cancel</Button>
-          <Button
-            disabled={
-              name.trim() === "" || email.trim() === "" || phone.trim() === ""
-            }
-            onClick={handleSaveDoctor}
-          >
-            {loading ? <CircularProgress size={24} /> : "Save"}
+          <Button onClick={closeDialog}>Cancel</Button>
+          <Button disabled={!canSave || saving} onClick={saveDoctor}>
+            {saving ? <CircularProgress size={20} /> : "Save"}
           </Button>
         </DialogActions>
       </Dialog>
 
-      <div>
-        {!loading && doctors.length > 0 ? (
-          <Grid container spacing={2}>
-            {doctors.map((doctor) => (
-              <Grid item xs={3} key={doctor.id}>
-                <Card
-                  sx={{ borderLeft: `${theme.palette.primary.main} 5px solid` }}
-                >
-                  <CardContent>
-                    <Typography
-                      sx={{
-                        color: theme.palette.primary.main,
-                        overflowWrap: "break-word",
-                      }}
-                      variant="h6"
-                    >
-                      {doctor.name}
-                    </Typography>
-                    {/* You can add more content to the card based on your doctor data */}
-                    <Typography variant="body2">{doctor.email}</Typography>
-                    <Typography variant="body2">{doctor.phone}</Typography>
-                    {/* Add more doctor fields as needed */}
-                  </CardContent>
-                </Card>
-              </Grid>
-            ))}
-          </Grid>
-        ) : (
-          <p>
-            {loading ? <CircularProgress size={54} /> : "No doctors found."}
-          </p>
-        )}
-      </div>
+      <Dialog open={credentialDialogOpen} onClose={closeCredentialDialog} fullWidth maxWidth="sm">
+        <DialogTitle>
+          {credentialMode === "create" ? "Create Doctor Login" : "Reset Doctor Password"}
+        </DialogTitle>
+        <DialogContent sx={{ display: "flex", flexDirection: "column", gap: 2, pt: 1 }}>
+          <Alert severity={credentialMode === "create" ? "info" : "warning"}>
+            {credentialMode === "create"
+              ? `Create login access for ${credentialTarget?.name || "this doctor"}.`
+              : `Set a new password for ${credentialTarget?.name || "this doctor"}.`}
+          </Alert>
+          {credentialMode === "create" ? (
+            <TextField
+              autoFocus
+              required
+              label="Login Email"
+              value={credentialForm.email}
+              onChange={updateCredentialForm("email")}
+              type="email"
+              fullWidth
+            />
+          ) : null}
+          <TextField
+            autoFocus={credentialMode !== "create"}
+            required
+            label={credentialMode === "create" ? "Initial Password" : "New Password"}
+            value={credentialForm.password}
+            onChange={updateCredentialForm("password")}
+            type="password"
+            fullWidth
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={closeCredentialDialog}>Cancel</Button>
+          <Button
+            disabled={
+              saving ||
+              credentialForm.password.trim() === "" ||
+              (credentialMode === "create" && credentialForm.email.trim() === "")
+            }
+            onClick={saveCredentials}
+          >
+            {saving ? (
+              <CircularProgress size={20} />
+            ) : credentialMode === "create" ? (
+              "Create Login"
+            ) : (
+              "Reset Password"
+            )}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Snackbar
+        open={Boolean(feedback)}
+        autoHideDuration={3200}
+        onClose={() => setFeedback(null)}
+        anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
+      >
+        {feedback ? (
+          <Alert onClose={() => setFeedback(null)} severity={feedback.severity} sx={{ width: "100%" }}>
+            {feedback.message}
+          </Alert>
+        ) : null}
+      </Snackbar>
     </div>
   );
 };
 
-export default Doctor;
+export default Doctors;

@@ -4,12 +4,20 @@
 
 body {
   margin: 0;
-  background-color: #eeeeee;
+  background: #f6f8fb;
   /* background-color: #e3f2fd; */
   /* background-color: #e0e0e0; */
   font-family: 'Poppins', sans-serif;
   /* font-family: 'Verdana', sans-serif; */
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+#root {
+  min-height: 100vh;
+}
+
+* {
+  box-sizing: border-box;
 }
 

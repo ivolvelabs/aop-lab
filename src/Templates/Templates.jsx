@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Box, Tab, TabList, TabPanel, Tabs } from "@mui/material";
+import { Box, Tab, Tabs } from "@mui/material";
 import Specimen from "./Specimen"; // Replace with your component
 import Diagnosis from "./Diagnosis"; // Replace with your component
 import MicroscopicDescription from "./MicroscopicDescription"; // Replace with your component

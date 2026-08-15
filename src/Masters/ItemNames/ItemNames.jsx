@@ -1,360 +1,392 @@
-import React, { useState, useEffect } from "react";
-
+import React, { useEffect, useMemo, useState } from "react";
 import {
   Button,
   Card,
+  CardActions,
   CardContent,
+  Chip,
   CircularProgress,
   Dialog,
   DialogActions,
   DialogContent,
-  DialogContentText,
   DialogTitle,
   FormControl,
+  FormControlLabel,
   Grid,
+  IconButton,
   InputLabel,
   MenuItem,
   Select,
+  Stack,
+  Switch,
   TextField,
+  Tooltip,
   Typography,
 } from "@mui/material";
-
 import {
-  collection,
-  getDocs,
-  query,
-  where,
+  ArchiveOutlined,
+  EditOutlined,
+  RestoreOutlined,
+} from "@mui/icons-material";
+import {
   addDoc,
-  serverTimestamp,
+  collection,
   doc,
+  getDocs,
   onSnapshot,
   orderBy,
+  query,
+  serverTimestamp,
+  updateDoc,
 } from "firebase/firestore";
+import { useParams } from "react-router-dom";
+import { useTheme } from "@mui/material/styles";
+import { db } from "../../firebase";
 
-import { db } from "../../firebase"; // Assuming your Firestore instance is imported here
-import { useTheme } from "@emotion/react";
+const isActiveRecord = (record) =>
+  record?.active !== false && !record?.archivedAt;
 
 const ItemNames = () => {
+  const { categoryId, subCatId } = useParams();
   const theme = useTheme();
 
   const [categories, setCategories] = useState([]);
-  const [selectedCategoryId, setSelectedCategoryId] = useState("");
+  const [selectedCategoryId, setSelectedCategoryId] = useState(categoryId || "");
   const [subcategories, setSubcategories] = useState([]);
-  const [selectedSubcategoryId, setSelectedSubcategoryId] = useState("");
+  const [selectedSubcategoryId, setSelectedSubcategoryId] = useState(subCatId || "");
   const [itemNames, setItemNames] = useState([]);
-  const [newItemName, setNewItemName] = useState("");
   const [loading, setLoading] = useState(true);
-  const [openAddItemDialog, setOpenAddItemDialog] = useState(false);
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [selectedItem, setSelectedItem] = useState(null);
   const [dialogCategoryId, setDialogCategoryId] = useState("");
   const [dialogSubcategoryId, setDialogSubcategoryId] = useState("");
   const [dialogItemName, setDialogItemName] = useState("");
-  const [allSubcategories, setAllSubcategories] = useState([]); // State for all subcategories
-  const [filteredSubcategories, setFilteredSubcategories] = useState([]); // State for filtered subcategories
+  const [allSubcategories, setAllSubcategories] = useState([]);
+  const [showArchived, setShowArchived] = useState(false);
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     const fetchCategories = async () => {
       const q = query(collection(db, "categories"), orderBy("name", "desc"));
       const snapshot = await getDocs(q);
-
-      setCategories(
-        snapshot.docs.map((doc) => ({ ...doc.data(), id: doc.id }))
-      );
+      setCategories(snapshot.docs.map((item) => ({ ...item.data(), id: item.id })));
       setLoading(false);
     };
 
     fetchCategories();
   }, []);
 
-  const handleCategoryChange = (event) => {
-    setSelectedCategoryId(event.target.value);
-    setSubcategories([]); // Reset subcategories when category changes
-    setSelectedSubcategoryId(""); // Reset selected subcategory
-  };
-
-  // Fetch subcategories only when a category is selected
   useEffect(() => {
-    if (selectedCategoryId) {
-      const fetchSubcategories = async () => {
-        const q = query(
-          collection(db, "categories", selectedCategoryId, "subcategories"),
-          orderBy("name", "desc")
-        );
-        const snapshot = await getDocs(q);
-
-        setSubcategories(
-          snapshot.docs.map((doc) => ({ ...doc.data(), id: doc.id }))
-        );
-      };
-
-      fetchSubcategories();
+    if (!selectedCategoryId) {
+      setSubcategories([]);
+      setSelectedSubcategoryId("");
+      return;
     }
+
+    const fetchSubcategories = async () => {
+      const q = query(
+        collection(db, "categories", selectedCategoryId, "subcategories"),
+        orderBy("name", "desc")
+      );
+      const snapshot = await getDocs(q);
+      setSubcategories(snapshot.docs.map((item) => ({ ...item.data(), id: item.id })));
+    };
+
+    fetchSubcategories();
   }, [selectedCategoryId]);
 
   useEffect(() => {
-    if (selectedSubcategoryId) {
-      const fetchItemNames = async () => {
-        const q = query(
-          collection(
+    if (!selectedCategoryId || !selectedSubcategoryId) {
+      setItemNames([]);
+      return undefined;
+    }
+
+    const q = query(
+      collection(
+        db,
+        "categories",
+        selectedCategoryId,
+        "subcategories",
+        selectedSubcategoryId,
+        "itemNames"
+      ),
+      orderBy("name", "desc")
+    );
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      setItemNames(snapshot.docs.map((item) => ({ ...item.data(), id: item.id })));
+      setLoading(false);
+    });
+
+    return () => unsubscribe();
+  }, [selectedSubcategoryId, selectedCategoryId]);
+
+  const visibleItemNames = useMemo(
+    () => itemNames.filter((item) => showArchived || isActiveRecord(item)),
+    [itemNames, showArchived]
+  );
+
+  const handleCategoryChange = (event) => {
+    setSelectedCategoryId(event.target.value);
+    setSubcategories([]);
+    setSelectedSubcategoryId("");
+  };
+
+  const openCreateDialog = () => {
+    setSelectedItem(null);
+    setDialogCategoryId(selectedCategoryId || "");
+    setDialogSubcategoryId(selectedSubcategoryId || "");
+    setDialogItemName("");
+    setAllSubcategories(subcategories);
+    setDialogOpen(true);
+  };
+
+  const openEditDialog = (item) => {
+    setSelectedItem(item);
+    setDialogCategoryId(selectedCategoryId);
+    setDialogSubcategoryId(selectedSubcategoryId);
+    setDialogItemName(item?.name || "");
+    setAllSubcategories(subcategories);
+    setDialogOpen(true);
+  };
+
+  const closeDialog = () => {
+    setDialogOpen(false);
+    setSelectedItem(null);
+    setDialogCategoryId("");
+    setDialogSubcategoryId("");
+    setDialogItemName("");
+  };
+
+  const handleDialogCategoryChange = async (event) => {
+    const nextCategoryId = event.target.value;
+    setDialogCategoryId(nextCategoryId);
+    const q = query(
+      collection(db, "categories", nextCategoryId, "subcategories"),
+      orderBy("name", "desc")
+    );
+    const snapshot = await getDocs(q);
+    setAllSubcategories(snapshot.docs.map((item) => ({ ...item.data(), id: item.id })));
+    setDialogSubcategoryId("");
+  };
+
+  const saveItem = async () => {
+    try {
+      setSaving(true);
+
+      if (selectedItem) {
+        await updateDoc(
+          doc(
             db,
             "categories",
             selectedCategoryId,
             "subcategories",
             selectedSubcategoryId,
+            "itemNames",
+            selectedItem.id
+          ),
+          {
+            name: dialogItemName.trim(),
+            updatedAt: serverTimestamp(),
+          }
+        );
+      } else {
+        await addDoc(
+          collection(
+            db,
+            "categories",
+            dialogCategoryId,
+            "subcategories",
+            dialogSubcategoryId,
             "itemNames"
           ),
-          orderBy("name", "desc")
+          {
+            name: dialogItemName.trim(),
+            active: true,
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+          }
         );
-        const unsubscribe = onSnapshot(q, (snapshot) => {
-          setItemNames(
-            snapshot.docs.map((doc) => ({ ...doc.data(), id: doc.id }))
-          );
-        });
-
-        return () => unsubscribe(); // Cleanup on unmount
-      };
-
-      fetchItemNames();
-    } else {
-      setItemNames([]);
-    }
-  }, [selectedSubcategoryId, selectedCategoryId]);
-
-  // const handleCategoryChange = (event) => {
-  //   setSelectedCategoryId(event.target.value);
-  // };
-
-  const handleSubcategoryChange = (event) => {
-    setSelectedSubcategoryId(event.target.value);
-  };
-
-  const handleNewItemNameChange = (event) => {
-    setNewItemName(event.target.value);
-  };
-
-  const handleAddItemDialogOpen = () => {
-    setOpenAddItemDialog(true);
-    setDialogCategoryId(""); // Reset dialog selections
-    setDialogSubcategoryId("");
-    setDialogItemName("");
-  };
-
-  const handleAddItemDialogClose = () => {
-    setOpenAddItemDialog(false);
-  };
-
-  const handleDialogCategoryChange = async (event) => {
-    setDialogCategoryId(event.target.value);
-    // Fetch all subcategories based on selected category
-    const q = query(
-      collection(db, "categories", event.target.value, "subcategories"),
-      orderBy("name", "desc")
-    );
-    try {
-      const snapshot = await getDocs(q);
-      console.log(snapshot.docs);
-      setAllSubcategories(
-        snapshot.docs.map((doc) => ({ ...doc.data(), id: doc.id }))
-      );
-      setDialogSubcategoryId("");
-    } catch (error) {
-      console.error("Error fetching subcategories:", error);
-    }
-  };
-
-  const handleDialogSubcategoryChange = (event) => {
-    setDialogSubcategoryId(event.target.value);
-  };
-
-  const handleDialogItemNameChange = (event) => {
-    setDialogItemName(event.target.value);
-  };
-
-  const handleSaveItem = async () => {
-    // if (dialogItemName.trim() !== "") {
-      try {
-        setLoading(true);
-
-        const itemRef = collection(
-          db,
-          "categories",
-          dialogCategoryId,
-          "subcategories",
-          dialogSubcategoryId,
-          "itemNames"
-        );
-        await addDoc(itemRef, {
-          name: dialogItemName,
-          createdAt: serverTimestamp(),
-        });
-
-        handleAddItemDialogClose(); // Close dialog after saving
-      } catch (error) {
-        console.error("Error adding item name:", error);
-      } finally {
-        setLoading(false);
       }
-    // }
+
+      closeDialog();
+    } catch (error) {
+      console.error("Error saving item name:", error);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const archiveItem = async (item) => {
+    await updateDoc(
+      doc(db, "categories", selectedCategoryId, "subcategories", selectedSubcategoryId, "itemNames", item.id),
+      {
+        active: false,
+        archivedAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      }
+    );
+  };
+
+  const restoreItem = async (item) => {
+    await updateDoc(
+      doc(db, "categories", selectedCategoryId, "subcategories", selectedSubcategoryId, "itemNames", item.id),
+      {
+        active: true,
+        archivedAt: null,
+        updatedAt: serverTimestamp(),
+      }
+    );
   };
 
   return (
     <div style={{ width: "100%" }}>
-      {/* Category selection */}
-      <div
-        style={{
-          display: "flex",
-          flexDirection: "row",
-          alignItems: "center",
-          width: "100%",
-        }}
-      >
-        <FormControl
-          sx={{ flex: 2, padding: "0px", margin: "10px" }}
-          size="small"
-        >
+      <Stack direction={{ xs: "column", md: "row" }} spacing={2} sx={{ my: 2 }}>
+        <FormControl fullWidth size="small">
           <InputLabel id="category-select-label">Select Category</InputLabel>
           <Select
             labelId="category-select-label"
-            id="category-select"
             label="Select Category"
             value={selectedCategoryId}
             onChange={handleCategoryChange}
-            // sx={{ flex: 2, padding: "0px" }}
           >
-            {categories.map((category) => (
+            {categories.filter(isActiveRecord).map((category) => (
               <MenuItem key={category.id} value={category.id}>
                 {category.name}
               </MenuItem>
             ))}
           </Select>
         </FormControl>
-        <FormControl
-          sx={{ flex: 2, padding: "0px", margin: "10px" }}
-          size="small"
-        >
-          <InputLabel id="category-select-label">Select Subcategory</InputLabel>
-
+        <FormControl fullWidth size="small">
+          <InputLabel id="subcategory-select-label">Select Subcategory</InputLabel>
           <Select
             labelId="subcategory-select-label"
-            id="subcategory-select"
             label="Select Subcategory"
             value={selectedSubcategoryId}
             onChange={(event) => setSelectedSubcategoryId(event.target.value)}
             disabled={!selectedCategoryId}
-            // sx={{ flex: 2, padding: "0px" }}
           >
-            {subcategories.map((subcategory) => (
+            {subcategories.filter(isActiveRecord).map((subcategory) => (
               <MenuItem key={subcategory.id} value={subcategory.id}>
                 {subcategory.name}
               </MenuItem>
             ))}
           </Select>
         </FormControl>
-        <Button
-          variant="contained"
-          color="primary"
-          onClick={handleAddItemDialogOpen}
-          sx={{ flex: 1 }}
-        >
+        <FormControlLabel
+          control={
+            <Switch
+              checked={showArchived}
+              onChange={(event) => setShowArchived(event.target.checked)}
+            />
+          }
+          label="Show archived"
+          sx={{ whiteSpace: "nowrap" }}
+        />
+        <Button variant="contained" onClick={openCreateDialog} disabled={!selectedCategoryId}>
           Add Item Name
         </Button>
-      </div>
-      {/* Item name list */}
+      </Stack>
+
       {loading ? (
         <CircularProgress size={54} />
-      ) : itemNames.length > 0 ? (
-        <div>
-          {/* <h2>Item Names</h2> */}
-          <Grid container spacing={2}>
-            {" "}
-            {/* Use Grid for layout flexibility */}
-            {itemNames.map((itemName) => (
-              <Grid item xs={4} key={itemName.id}>
-                <Card
-                  sx={{ borderLeft: `${theme.palette.primary.main} 5px solid` }}
-                >
+      ) : visibleItemNames.length > 0 ? (
+        <Grid container spacing={2}>
+          {visibleItemNames.map((itemName) => {
+            const active = isActiveRecord(itemName);
+
+            return (
+              <Grid item xs={12} sm={6} md={4} key={itemName.id}>
+                <Card sx={{ borderLeft: `${theme.palette.primary.main} 5px solid`, opacity: active ? 1 : 0.68 }}>
                   <CardContent>
-                    <Typography
-                      sx={{
-                        color: theme.palette.primary.main,
-                        overflowWrap: "break-word",
-                      }}
-                      variant="h6"
-                    >
-                      {itemName.name}
-                    </Typography>
-                    {/* You can add more content to the card based on your subcategory data */}
+                    <Stack direction="row" spacing={1} alignItems="center">
+                      <Typography sx={{ color: theme.palette.primary.main, overflowWrap: "break-word" }} variant="h6">
+                        {itemName.name}
+                      </Typography>
+                      <Chip size="small" label={active ? "Active" : "Archived"} color={active ? "success" : "default"} />
+                    </Stack>
                   </CardContent>
+                  <CardActions>
+                    <Tooltip title="Edit">
+                      <IconButton size="small" onClick={() => openEditDialog(itemName)}>
+                        <EditOutlined fontSize="small" />
+                      </IconButton>
+                    </Tooltip>
+                    {active ? (
+                      <Tooltip title="Archive">
+                        <IconButton size="small" onClick={() => archiveItem(itemName)}>
+                          <ArchiveOutlined fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                    ) : (
+                      <Tooltip title="Restore">
+                        <IconButton size="small" onClick={() => restoreItem(itemName)}>
+                          <RestoreOutlined fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                    )}
+                  </CardActions>
                 </Card>
               </Grid>
-            ))}
-          </Grid>
-        </div>
+            );
+          })}
+        </Grid>
       ) : (
         <p>No item names found for this subcategory.</p>
       )}
-      {/* Add item name form */}
-      {/* <TextField
-        label="Add new item name"
-        value={newItemName}
-        onChange={handleNewItemNameChange}
-        disabled={!selectedSubcategoryId} // Disable if no subcategory selected
-      /> */}
-      {/* <Button
-        variant="contained"
-        color="primary"
-        onClick={handleAddItemDialogOpen}
-      >
-        Add Item Name
-      </Button> */}
-      <Dialog open={openAddItemDialog} onClose={handleAddItemDialogClose}>
-        <DialogTitle>Add New Item Name</DialogTitle>
-        <DialogContent>
-          <DialogContentText>
-            Select a category and subcategory, then enter the item name.
-          </DialogContentText>
-          <Select
-            labelId="dialog-category-select-label"
-            id="dialog-category-select"
-            label="Category"
-            value={dialogCategoryId}
-            onChange={handleDialogCategoryChange}
-          >
-            {categories.map((category) => (
-              <MenuItem key={category.id} value={category.id}>
-                {category.name}
-              </MenuItem>
-            ))}
-          </Select>
-          <Select
-            labelId="dialog-subcategory-select-label"
-            id="dialog-subcategory-select"
-            label="Subcategory"
-            value={dialogSubcategoryId}
-            onChange={handleDialogSubcategoryChange}
-            disabled={!dialogCategoryId} // Disable if no category selected
-          >
-            {allSubcategories.map((subcategory) => (
-              <MenuItem key={subcategory.id} value={subcategory.id}>
-                {subcategory.name}
-              </MenuItem>
-            ))}
-          </Select>
+
+      <Dialog open={dialogOpen} onClose={closeDialog} fullWidth maxWidth="sm">
+        <DialogTitle>{selectedItem ? "Edit Item Name" : "Add Item Name"}</DialogTitle>
+        <DialogContent sx={{ display: "flex", flexDirection: "column", gap: 2, pt: 1 }}>
+          {!selectedItem ? (
+            <>
+              <FormControl fullWidth>
+                <InputLabel id="dialog-category-select-label">Category</InputLabel>
+                <Select
+                  labelId="dialog-category-select-label"
+                  label="Category"
+                  value={dialogCategoryId}
+                  onChange={handleDialogCategoryChange}
+                >
+                  {categories.filter(isActiveRecord).map((category) => (
+                    <MenuItem key={category.id} value={category.id}>
+                      {category.name}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+              <FormControl fullWidth>
+                <InputLabel id="dialog-subcategory-select-label">Subcategory</InputLabel>
+                <Select
+                  labelId="dialog-subcategory-select-label"
+                  label="Subcategory"
+                  value={dialogSubcategoryId}
+                  onChange={(event) => setDialogSubcategoryId(event.target.value)}
+                  disabled={!dialogCategoryId}
+                >
+                  {allSubcategories.filter(isActiveRecord).map((subcategory) => (
+                    <MenuItem key={subcategory.id} value={subcategory.id}>
+                      {subcategory.name}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </>
+          ) : null}
           <TextField
+            autoFocus
             label="Item Name"
             value={dialogItemName}
-            onChange={handleDialogItemNameChange}
+            onChange={(event) => setDialogItemName(event.target.value)}
+            fullWidth
           />
         </DialogContent>
         <DialogActions>
-          <Button onClick={handleAddItemDialogClose} color="primary">
-            Cancel
-          </Button>
+          <Button onClick={closeDialog}>Cancel</Button>
           <Button
-            onClick={handleSaveItem}
-            color="primary"
-            disabled={!dialogSubcategoryId || dialogItemName.trim() === ""}
+            onClick={saveItem}
+            disabled={!dialogSubcategoryId || dialogItemName.trim() === "" || saving}
           >
-            {loading ? <CircularProgress size={24} /> : "Save"}
+            {saving ? <CircularProgress size={20} /> : "Save"}
           </Button>
         </DialogActions>
       </Dialog>

@@ -7,18 +7,25 @@ import {
   MenuItem,
   Button,
   CircularProgress,
-  IconButton,
   Box,
   FormControl,
   InputLabel,
   InputAdornment,
 } from "@mui/material";
-import { collection, getDocs, doc, updateDoc } from "firebase/firestore";
+import { arrayUnion, collection, getDocs, doc, updateDoc } from "firebase/firestore";
 import { db } from "../firebase"; // Assuming your Firestore instance is imported here
-import { Delete } from "@mui/icons-material";
 import JoditEditor from "jodit-react";
+import { useAuth } from "../Contexts/AuthContext";
+import { buildWorkflowEvent } from "../utils/workflowAudit";
+
+const isActiveRecord = (record) =>
+  record?.active !== false && !record?.archivedAt;
+
+const getTemplateSelectValue = (value, options) =>
+  options.some((option) => option.description === value) ? value : "";
 
 const ResultEntered = ({ bookingData, statesInfo, handleUpdateStatesInfo }) => {
+  const { user } = useAuth();
   const [resultEnteredDetails, setResultEnteredDetails] = useState(
     bookingData?.resultEnteredDetails || {}
   );
@@ -28,9 +35,9 @@ const ResultEntered = ({ bookingData, statesInfo, handleUpdateStatesInfo }) => {
   const [grossDescription, setGrossDescription] = useState(
     bookingData?.grossDescription ? bookingData?.grossDescription : ""
   );
-  const [listOfSectionsDetails, setListOfSectionsDetails] = useState([
-    bookingData?.listOfSectionsDetails || [],
-  ]);
+  const [listOfSectionsDetails, setListOfSectionsDetails] = useState(
+    bookingData?.listOfSectionsDetails || []
+  );
   const [isLoading, setIsLoading] = useState(true);
   const [comments, setComments] = useState(
     bookingData?.comments ? bookingData?.comments : ""
@@ -45,28 +52,10 @@ const ResultEntered = ({ bookingData, statesInfo, handleUpdateStatesInfo }) => {
       // //(await bookingData + "bd------");
       // //(await bookingData.age + "bd age------");
 
-      if (bookingData.resultEnteredDetails) {
-        setResultEnteredDetails(bookingData.resultEnteredDetails);
-      } else {
-        setResultEnteredDetails({});
-        console.error("Result entered not found:", bookingData.id);
-      }
-  
-      if (bookingData.grossDescription) {
-        setGrossDescription(bookingData.grossDescription || "");
-      } else {
-        console.error("grossDescription not found:", bookingData.id);
-      }
-  
-      if (bookingData.listOfSectionsDetails) {
-        setListOfSectionsDetails(bookingData.listOfSectionsDetails);
-      } else {
-        setListOfSectionsDetails([]);
-        console.error("LOS not found:", bookingData.id);
-      }
-      if (bookingData.comments) {
-        setComments(bookingData.comments || "");
-      }
+      setResultEnteredDetails(bookingData.resultEnteredDetails || {});
+      setGrossDescription(bookingData.grossDescription || "");
+      setListOfSectionsDetails(bookingData.listOfSectionsDetails || []);
+      setComments(bookingData.comments || "");
     }
 
 
@@ -79,18 +68,30 @@ const ResultEntered = ({ bookingData, statesInfo, handleUpdateStatesInfo }) => {
       );
       
       setDiagnosisOptions(
-        diagnosisSnapshot.docs.map((doc) => ({
-          id: doc.id,
-          name: doc.data().name,
-          description: doc.data().description,
-        }))
+        diagnosisSnapshot.docs
+          .map((doc) => ({
+            id: doc.id,
+            ...doc.data(),
+          }))
+          .filter(isActiveRecord)
+          .map((item) => ({
+            id: item.id,
+            name: item.name,
+            description: item.description,
+          }))
       );
       setMicroscopicDescriptionOptions(
-        microscopicDescriptionSnapshot.docs.map((doc) => ({
-          id: doc.id,
-          name: doc.data().name,
-          description: doc.data().description,
-        }))
+        microscopicDescriptionSnapshot.docs
+          .map((doc) => ({
+            id: doc.id,
+            ...doc.data(),
+          }))
+          .filter(isActiveRecord)
+          .map((item) => ({
+            id: item.id,
+            name: item.name,
+            description: item.description,
+          }))
       );
 
       // if ( bookingData?.slideDeliveredDetails?.he?.he) {
@@ -100,24 +101,24 @@ const ResultEntered = ({ bookingData, statesInfo, handleUpdateStatesInfo }) => {
         // );
         // //(bookingData?.listOfSectionsDetails?.length);
         // //(parseInt(bookingData?.slideDeliveredDetails?.he?.he));
-        if (
-          ( bookingData?.listOfSectionsDetails?.length) ===
-           parseInt(bookingData?.slideDeliveredDetails?.he?.he)
-        ) {
+        const existingSections = bookingData?.listOfSectionsDetails || [];
+        const heSlideCount = Number.parseInt(
+          bookingData?.slideDeliveredDetails?.he?.he,
+          10
+        );
+
+        if (!Number.isFinite(heSlideCount) || heSlideCount <= 0) {
+          setListOfSectionsDetails(existingSections);
+        } else if (existingSections.length === heSlideCount) {
           return;
         } else {
-          // //(...Array(parseInt(await bookingData?.slideDeliveredDetails?.he?.he)));
-          const res = [
-            ...Array(parseInt(bookingData?.slideDeliveredDetails?.he?.he)),
-          ].map((_, i) => {
+          const res = [...Array(heSlideCount)].map((_, i) => {
             return {
               prefix: "Cassette",
-              name: listOfSectionsDetails[i]?.name || "",
-              description:
-                listOfSectionsDetails[i]?.description || "",
+              name: existingSections[i]?.name || "",
+              description: existingSections[i]?.description || "",
             };
           });
-          //(res);
           setListOfSectionsDetails(res);
         }
       // }
@@ -151,11 +152,6 @@ const ResultEntered = ({ bookingData, statesInfo, handleUpdateStatesInfo }) => {
     setListOfSectionsDetails(updatedList);
   };
 
-  const handleResultEnteredTextFieldChange = (event) => {
-    const { name, value } = event.target;
-    setResultEnteredDetails({ ...resultEnteredDetails, [name]: value });
-  };
-
   const handleSave = async () => {
     setIsLoading(true);
     const bookingRef = doc(db, "bookings", bookingData.id);
@@ -166,7 +162,7 @@ const ResultEntered = ({ bookingData, statesInfo, handleUpdateStatesInfo }) => {
           return {
             ...state,
             isDone: true,
-            updatedAt: new Date().toString(),
+            updatedAt: new Date(),
           };
         }
         return state;
@@ -178,6 +174,13 @@ const ResultEntered = ({ bookingData, statesInfo, handleUpdateStatesInfo }) => {
         statesInfo: updatedStatesInfo,
         grossDescription: grossDescription,
         comments: comments,
+        workflowHistory: arrayUnion(
+          buildWorkflowEvent({
+            step: "resultEntered",
+            action: "Result details saved",
+            user,
+          })
+        ),
       };
 
       await updateDoc(bookingRef, updates);
@@ -252,7 +255,10 @@ const config = useMemo(
                     Select Diagnosis Template
                   </InputLabel>
                   <Select
-                    value={resultEnteredDetails.diagnosis || ""}
+                    value={getTemplateSelectValue(
+                      resultEnteredDetails.diagnosis,
+                      diagnosisOptions
+                    )}
                     onChange={(event) =>
                       handleDropdownChange(event, diagnosisOptions, "diagnosis")
                     }
@@ -295,7 +301,10 @@ const config = useMemo(
                     labelId="microscopic-description-label"
                     id="microscopic-description"
                     label="Microscopic Description"
-                    value={resultEnteredDetails.microscopicDescription || ""}
+                    value={getTemplateSelectValue(
+                      resultEnteredDetails.microscopicDescription,
+                      microscopicDescriptionOptions
+                    )}
                     onChange={(event) =>
                       handleDropdownChange(
                         event,
@@ -338,7 +347,7 @@ const config = useMemo(
                 <InputLabel sx={{ fontSize:"20px", color: "black" }}>List Of Sections</InputLabel>
                 {listOfSectionsDetails?.map((los, index) => {
                   return (
-                    <>
+                    <React.Fragment key={`section-${index}`}>
                       <TextField
                         label={`H&E Slide-${index + 1}`}
                         id={`adornment-prefix-${index}`}
@@ -364,7 +373,7 @@ const config = useMemo(
                         onChange={handleTextFieldChange(index)}
                         fullWidth
                       />
-                    </>
+                    </React.Fragment>
                   );
                 })}
               </Grid>

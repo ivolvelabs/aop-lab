@@ -1,20 +1,14 @@
 import { Button, CircularProgress } from "@mui/material";
-import { useRef, useState } from "react";
+import { useRef } from "react";
 import { useReactToPrint } from "react-to-print";
 import { useTheme } from "@emotion/react";
 import { useLocation } from "react-router-dom";
-import html2pdf from "html2pdf.js";
 import "./MyBookings.css";
-import { ReactPDF, PDFViewer, Document, Page, View, Text, PDFDownloadLink } from "@react-pdf/renderer";
-
-const MyDoc = (
-  <Document>
-    <Page>// My document data</Page>
-  </Document>
-);
+import { sanitizeHtml } from "../utils/sanitizeHtml";
 
 
-function MyBookings({props}) {
+
+function MyBookings() {
 
 let location = useLocation();
 
@@ -29,7 +23,7 @@ let location = useLocation();
     border: "2px solid black",
   };
 
-  const [isLoading, setIsLoading] = useState(false);
+  const isLoading = false;
 
   const Report = () => {
     return (
@@ -99,9 +93,12 @@ let location = useLocation();
               <p>
                 <span>Date of Receipt: </span>
                 <b>
-                  {new Date(bookingData.bookingDate).toLocaleDateString(
-                    "en-GB"
-                  )}
+                  {bookingData.bookingDate.toDate().toLocaleString("en-IN", {
+                    day: "2-digit",
+                    month: "2-digit",
+                    year: "numeric",
+                    timeZone: "Asia/Kolkata",
+                  })}
                 </b>
               </p>
             </div>
@@ -121,13 +118,18 @@ let location = useLocation();
                 <b>
                   {new Date(
                     bookingData.statesInfo[3].updatedAt
-                  ).toLocaleDateString("en-GB")}
+                  ).toLocaleString("en-IN", {
+                    day: "2-digit",
+                    month: "2-digit",
+                    year: "numeric",
+                    timeZone: "Asia/Kolkata",
+                  })}
                 </b>
               </p>
             </div>
           </div>
           <hr
-            class="solid"
+            className="solid"
             style={{
               border: `1px solid ${theme.palette.primary.main}`,
               margin: "20px 0px",
@@ -142,7 +144,7 @@ let location = useLocation();
             <div style={{ fontSize: "12px", fontWeight: "1000" }}>SPECIMEN</div>
             <div
               dangerouslySetInnerHTML={{
-                __html: bookingData.resultEnteredDetails.specimen,
+                __html: sanitizeHtml(bookingData.resultEnteredDetails.specimen),
               }}
             />
           </div>
@@ -159,7 +161,7 @@ let location = useLocation();
             </div>
             <div
               dangerouslySetInnerHTML={{
-                __html: bookingData.resultEnteredDetails.diagnosis,
+                __html: sanitizeHtml(bookingData.resultEnteredDetails.diagnosis),
               }}
             />
           </div>
@@ -185,7 +187,9 @@ let location = useLocation();
             </div>
             <div
               dangerouslySetInnerHTML={{
-                __html: bookingData.resultEnteredDetails.microscopicDescription,
+                __html: sanitizeHtml(
+                  bookingData.resultEnteredDetails.microscopicDescription
+                ),
               }}
             />
           </div>
@@ -202,7 +206,7 @@ let location = useLocation();
             </div>
             <div
               dangerouslySetInnerHTML={{
-                __html: bookingData.grossDescription,
+                __html: sanitizeHtml(bookingData.grossDescription),
               }}
             />
           </div>
@@ -232,53 +236,12 @@ let location = useLocation();
   const contentToPrint = useRef(null);
   const handlePrint = useReactToPrint({
     documentTitle: `${bookingData.serialNumber} - ${bookingData.patientName}`,
-    onBeforePrint: () => console.log("before printing..."),
-    onAfterPrint: () => console.log("after printing..."),
     removeAfterPrint: true,
   });
 
-  const handleShare = useReactToPrint({
-    content: () => contentToPrint.current,
-    documentTitle: `${bookingData.serialNumber}.pdf`,
-    copyStyles: true,
-    print: async (printIframe) => {
-      const document = printIframe.contentDocument;
-      if (document) {
-        const html = document.getElementsByTagName("html")[0];
-        console.log(html);
-        await html2pdf().from(html).save();
-      }
-    },
-  });
-const handleDownload = useReactToPrint({
-  onPrintError: (error) => console.log(error),
-  content: () => contentToPrint.current,
-  removeAfterPrint: true,
-  print: async (printIframe) => {
-    const document = printIframe.contentDocument;
-    if (document) {
-      const html = document.getElementsByTagName("html")[0];
-      console.log(html);
-      const exporter = new html2pdf();
-      await exporter.from(html).save();
-    }
-  },
-});
-
-var opt = {
-  pagebreak: { mode: "avoid-all" },
-  //   pagebreak: { mode: "legacy" },
-  margin: [2, 0.1],
-  filename: `${bookingData.serialNumber} - ${bookingData.patientName}`,
-  image: { type: "png", quality: 1 },
-  html2canvas: { scale: 2 },
-  jsPDF: { unit: "in", format: "a4", orientation: "portrait" },
-};
-
-
   return (
     <div>
-     
+
       {bookingData ? (
         <div
           style={{
@@ -315,9 +278,9 @@ var opt = {
                 handleShare();
                 // handleRTPdf();
                 // html2pdf(document.getElementById("print-element"));
-                
+
                 // handleDownload();
-                
+
                 // html2pdf()
                 //   .set(opt)
                 //   .from(document.getElementById("print-element"))

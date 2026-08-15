@@ -1,14 +1,13 @@
 import React, { useState, useEffect } from "react";
 import {
-  Box,
   TextField,
-  Button,
-  Typography,
-  IconButton,
   InputAdornment,
   CircularProgress,
+  Box,
+  Paper,
+  Stack,
+  Typography,
 } from "@mui/material";
-import SearchIcon from "@mui/icons-material/Search";
 import { collection, getDocs, query, where } from "firebase/firestore";
 import { db } from "../firebase"; // Assuming your Firestore instance is imported here
 import BookingsTable from "./BookingsTable";
@@ -28,7 +27,6 @@ const PastBookings = () => {
           where("isCompleted", "==", true)
         );
         const snapshot = await getDocs(q);
-        console.log(snapshot.docs);
         const fetchedBookings = snapshot.docs.map((doc) => ({
           ...doc.data(),
           id: doc.id,
@@ -48,44 +46,36 @@ const PastBookings = () => {
     setSearchQuery(event.target.value);
   };
 
-  const filteredBookings = searchQuery
+  const normalizedSearch = searchQuery.trim().toLowerCase();
+  const filteredBookings = normalizedSearch
     ? bookings.filter((booking) =>
-        booking.patientName.toLowerCase().includes(searchQuery.toLowerCase())
+        [
+          booking.patientName,
+          booking.serialNumber,
+          booking.phone,
+          booking.referralDoctor?.name,
+          booking.hospital?.name,
+          booking.clinicalDiagnosis,
+          booking.typeOfSpecimen?.category,
+          booking.typeOfSpecimen?.subcategory,
+          booking.typeOfSpecimen?.itemName,
+        ]
+          .filter(Boolean)
+          .some((value) => String(value).toLowerCase().includes(normalizedSearch))
       )
     : bookings;
 
   return (
     <div>
-      <div
-        style={{
-          // width: "100%",
-          display: "flex",
-          flexDirection: "row",
-          alignItems: "center",
-        }}
-      >
-        <div
-          style={{
-            display: "flex",
-            width: "100%",
-            flexDirection: "row",
-            justifyContent: "center",
-            alignItems: "center",
-            margin: "10px",
-          }}
-        >
-          <div
-            style={{
-              display: "flex",
-              flex: 1,
-              alignItems: "center",
-              justifyContent: "center",
-            }}
-          >
+      <Paper elevation={0} sx={{ p: { xs: 1.5, md: 2 }, mb: 2 }}>
+        <Stack spacing={0.75}>
+          <Typography variant="subtitle1" sx={{ fontWeight: 850 }}>
+            Completed Reports
+          </Typography>
             <TextField
               value={searchQuery}
               onChange={handleSearch}
-              //   label="Search"
+              label="Search by patient, report no, doctor, hospital, phone, or test"
               type="search"
               fullWidth
               size="small"
@@ -96,34 +86,17 @@ const PastBookings = () => {
                   </InputAdornment>
                 ),
               }}
-              // sx={{ mb: 2 }}
             />
-          </div>
-          {/* <div
-            style={{
-              display: "flex",
-              flex: 1,
-              alignItems: "center",
-              justifyContent: "end",
-            }}
-          >
-            <Button
-              type="submit"
-              variant="contained"
-              color="primary"
-            > */}
-              {/* {loading ? <CircularProgress size={24} /> : "Add New Booking"} */}
-              {/* Add New Booking
-            </Button>
-          </div> */}
-        </div>
-      </div>
+        </Stack>
+      </Paper>
       {isLoading ? (
-        <CircularProgress sx={{ mt: 2 }} />
-      ) : bookings.length > 0 ? (
+        <Box sx={{ display: "flex", justifyContent: "center", py: 5 }}>
+          <CircularProgress />
+        </Box>
+      ) : filteredBookings.length > 0 ? (
         <BookingsTable bookings={filteredBookings} isCurrent={true} />
       ) : (
-        <p>No bookings found.</p>
+        <BookingsTable bookings={[]} isCurrent={true} />
       )}
     </div>
   );

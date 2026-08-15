@@ -4,28 +4,29 @@ import {
   Typography,
   Select,
   MenuItem,
-  TextField,
   Button,
   CircularProgress,
   InputLabel,
 } from "@mui/material";
-import { collection, getDocs, doc, updateDoc } from "firebase/firestore";
+import { arrayUnion, collection, getDocs, doc, updateDoc } from "firebase/firestore";
 import { db } from "../firebase"; // Assuming your Firestore instance is imported here
 // import ReactDOM from "react-dom";
 // import { Editor, EditorState } from "draft-js";
 // import "draft-js/dist/Draft.css";
 import JoditEditor from "jodit-react";
+import { useAuth } from "../Contexts/AuthContext";
+import { buildWorkflowEvent } from "../utils/workflowAudit";
 
-
+const isActiveRecord = (record) =>
+  record?.active !== false && !record?.archivedAt;
 
 
 const Grossed = ({
   bookingData,
-  onSave,
   statesInfo,
-  updateStatesInfo,
   handleUpdateStatesInfo,
 }) => {
+  const { user } = useAuth();
   const [grossDescriptionTemplates, setGrossDescriptionTemplates] = useState(
     []
   );
@@ -48,18 +49,15 @@ const config = useMemo(
 
   useEffect(() => {
     setIsLoading(true); // Set loading initially
-    console.log(bookingData);
-    if (bookingData.grossDescription) {
-      setGrossDescription(bookingData.grossDescription || "");
-    } else {
-      console.error("Booking not found:", bookingData.id);
-    }
+    setGrossDescription(bookingData.grossDescription || "");
     getDocs(collection(db, "grossDescriptionTemplates"))
       .then((querySnapshot) => {
-        const templates = querySnapshot.docs.map((doc) => ({
-          id: doc.id,
-          ...doc.data(),
-        }));
+        const templates = querySnapshot.docs
+          .map((doc) => ({
+            id: doc.id,
+            ...doc.data(),
+          }))
+          .filter(isActiveRecord);
         setGrossDescriptionTemplates(templates);
         setIsLoading(false); // Set loading to false after data is fetched
       })
@@ -67,7 +65,7 @@ const config = useMemo(
         console.error("Error fetching templates:", error);
         setIsLoading(false); // Set loading to false even on error
       });
-  }, [bookingData.id, bookingData.grossDescription ]);
+  }, [bookingData]);
 
   const handleTemplateChange = (event) => {
     const selectedTemplateData = grossDescriptionTemplates.find(
@@ -99,6 +97,13 @@ const config = useMemo(
           grossDescription,
           // rteData: content,
           statesInfo: updatedStatesInfo,
+          workflowHistory: arrayUnion(
+            buildWorkflowEvent({
+              step: "grossed",
+              action: "Grossing details saved",
+              user,
+            })
+          ),
         });
       } else {
         console.error("statesInfo is undefined, cannot update states");
@@ -109,8 +114,6 @@ const config = useMemo(
       setIsLoading(false); // Set loading to false after saving (or error)
     }
   };
-
-  const onChange = (value) => {};
 
   return (
     <Grid container spacing={2}>

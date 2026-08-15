@@ -10,6 +10,25 @@
 
 # production
 /build
+/dist
+
+# Firebase deployment cache
+/.firebase
+
+# local environment files
+.env
+.env.*
+!.env.example
+
+# local diagnostics and visual verification
+*.log
+/aop-*.png
+
+# local Codex workspace settings
+/.codex
+
+# legacy standalone Functions copy; active Functions live in /functions
+/aop-lab-functions/
 
 # misc
 .DS_Store

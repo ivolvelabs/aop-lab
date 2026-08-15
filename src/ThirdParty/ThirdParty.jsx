@@ -1,4 +1,4 @@
-import { Box, Tab, TabList, TabPanel, Tabs } from "@mui/material";
+import { Box, Tab, Tabs } from "@mui/material";
  // Assuming your hospital component path
 import Doctors from "./Doctors"; // Assuming your doctor component path
 import React, { useState } from "react";

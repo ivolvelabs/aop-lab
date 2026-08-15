@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from "react";
 import {
-  Grid,
   Typography,
   TextField,
   Button,
@@ -8,48 +7,47 @@ import {
   IconButton,
   Box,
 } from "@mui/material";
-import { collection, getDocs, doc, updateDoc } from "firebase/firestore";
+import { arrayUnion, doc, updateDoc } from "firebase/firestore";
 import { db } from "../firebase"; // Assuming your Firestore instance is imported here
 import { Delete } from "@mui/icons-material";
+import { useAuth } from "../Contexts/AuthContext";
+import { buildWorkflowEvent } from "../utils/workflowAudit";
+
+const initialSlideDeliveredDetails = {
+  afb: {
+    stainName: "",
+    cassetteName: "",
+  },
+  he: { stainName: "", cassetteName: "" },
+  pas: { stainName: "", cassetteName: "" },
+  gms: { stainName: "", cassetteName: "" },
+  congoRed: { stainName: "", cassetteName: "" },
+  ihc: { stainName: "", cassetteName: "" },
+};
 
 const SlideDelivered = ({
   bookingData,
   statesInfo,
-  updateStatesInfo,
   handleUpdateStatesInfo,
 }) => {
+  const { user } = useAuth();
   const [newItems, setNewItems] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [others, setOthers] = useState([]);
-  
-  const initialSlideDeliveredDetails = {
-    afb: {
-      stainName: "",
-      cassetteName: "",
-    },
-    he: { stainName: "", cassetteName: "" },
-    pas: { stainName: "", cassetteName: "" },
-    gms: { stainName: "", cassetteName: "" },
-    congoRed: { stainName: "", cassetteName: "" },
-    ihc: { stainName: "", cassetteName: "" },
-  };
+
   const [slideDeliveredDetails, setSlideDeliveredDetails] = useState(
     bookingData?.slideDeliveredDetails || initialSlideDeliveredDetails
   );
  
 
   useEffect(() => {
-      var ot = [];
+    const ot = [];
+    const details =
+      bookingData?.slideDeliveredDetails || initialSlideDeliveredDetails;
 
     setIsLoading(true);
-    if (bookingData?.slideDeliveredDetails) {
-      setSlideDeliveredDetails(bookingData.slideDeliveredDetails);
-    } else {
-      setSlideDeliveredDetails(initialSlideDeliveredDetails);
-      console.error("Booking not found:", bookingData.id);
-    }
-    console.log(slideDeliveredDetails);
-    Object.entries(slideDeliveredDetails).map((i) => {
+    setSlideDeliveredDetails(details);
+    Object.entries(details).forEach((i) => {
       if (
         i[0].includes("afb") ||
         i[0].includes("congoRed") ||
@@ -58,41 +56,13 @@ const SlideDelivered = ({
         i[0].includes("ihc") ||
         i[0].includes("pas")
       ) {
-        return false;
-      } else {
-        ot.push(i);
-        console.log(i);
-        console.log(ot);
+        return;
       }
+      ot.push(i);
     });
     setOthers(ot);
-    console.log(ot);
     setIsLoading(false);
   }, [bookingData]);
-
-  // useEffect(() => {
-  //   var ot = [];
-  //   console.log("length--------" + (bookingData?.slideDeliveredDetails));
-
-  //     Object.entries(bookingData?.slideDeliveredDetails).map((i) => {
-  //       if (
-  //         i[0].includes("afb") ||
-  //         i[0].includes("congoRed") ||
-  //         i[0].includes("gms") ||
-  //         i[0].includes("he") ||
-  //         i[0].includes("ihc") ||
-  //         i[0].includes("pas")
-  //       ) {
-  //         return false;
-  //       } else {
-  //         ot.push(i);
-  //         console.log(i);
-  //         console.log(ot);
-  //       }
-  //     });
-  //   setOthers(ot);
-  //   console.log(ot);
-  // }, );
 
   const handleTextFieldChange = (event, stain) => {
     const { name, value } = event.target;
@@ -120,10 +90,6 @@ const SlideDelivered = ({
 
     setSlideDeliveredDetails(updatedDetails);
   };
-
-  useEffect(() => {
-    console.log("slideDeliveredDetails changed:", slideDeliveredDetails);
-  }, [slideDeliveredDetails]);
 
   const handleAddNewItem = () => {
     setNewItems([
@@ -168,8 +134,13 @@ const SlideDelivered = ({
         });
         handleUpdateStatesInfo(updates.statesInfo);
       }
-
-      console.log(updates);
+      updates.workflowHistory = arrayUnion(
+        buildWorkflowEvent({
+          step: "slideDelivered",
+          action: "Slide delivery details saved",
+          user,
+        })
+      );
 
       await updateDoc(bookingRef, updates);
     } catch (error) {
@@ -318,14 +289,14 @@ const SlideDelivered = ({
             >
               {/* <Typography variant="h6">Other Slides Information</Typography> */}
               <div>Other Stains</div>
-              {console.log(others)}
               {others.length > 0
                 ? others.map((a) => {
                     return (
                       <TextField
+                        key={a[0]}
                         style={{ margin: "10px 20px" }}
                         label={a[0]}
-                        name={a[1]}
+                        name={a[0]}
                         value={a[1] || ""}
                         onChange={handleTextFieldChange}
                         //
@@ -383,7 +354,6 @@ const SlideDelivered = ({
         <Button variant="contained" size="small" onClick={handleAddNewItem}>
           Add New Item
         </Button>
-        {console.log(slideDeliveredDetails?.he?.he)}
         <Button
           variant="contained"
           disabled={

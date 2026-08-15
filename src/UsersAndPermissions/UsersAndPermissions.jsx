@@ -1,263 +1,287 @@
-import React, { useState, useEffect } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
-  getAuth,
-  createUserWithEmailAndPassword,
-  EmailAuthProvider,
-  linkWithCredential,
-} from "firebase/auth";
+  Alert,
+  Button,
+  CircularProgress,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  FormControl,
+  FormControlLabel,
+  FormLabel,
+  InputAdornment,
+  Radio,
+  RadioGroup,
+  Snackbar,
+  Stack,
+  Switch,
+  TextField,
+} from "@mui/material";
 import {
-  getFirestore,
   collection,
-  addDoc,
-  setDoc,
   doc,
   onSnapshot,
+  serverTimestamp,
+  updateDoc,
 } from "firebase/firestore";
-import { auth, db } from "../firebase";
-import {
-  CircularProgress,
-  Button,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  TextField,
-  TableContainer,
-  Paper,
-  RadioGroup,
-  FormControlLabel,
-  Radio,
-  InputAdornment,
-} from "@mui/material";
-import UserTable from "./UserTable";
 import { getFunctions, httpsCallable } from "firebase/functions";
-import { AccountCircle, Search } from "@mui/icons-material";
+import { Search } from "@mui/icons-material";
+import { db } from "../firebase";
+import { useAuth } from "../Contexts/AuthContext";
+import UserTable from "./UserTable";
+
+const emptyForm = {
+  fullName: "",
+  email: "",
+  password: "",
+  role: "technician",
+};
+
+const isActiveRecord = (record) =>
+  record?.active !== false && !record?.archivedAt;
+
+const normalize = (value) => String(value || "").toLowerCase().trim();
 
 const UsersAndPermissions = () => {
   const functions = getFunctions();
   const createUser = httpsCallable(functions, "createUser");
+  const { authUser } = useAuth();
 
   const [users, setUsers] = useState([]);
-  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [usersLoading, setUsersLoading] = useState(true);
-  const [fullName, setName] = useState("");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [role, setRole] = useState("technician");
-  const [addUserDialogOpen, setAddUserDialogOpen] = useState(false);
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [selectedUser, setSelectedUser] = useState(null);
+  const [form, setForm] = useState(emptyForm);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [showInactive, setShowInactive] = useState(false);
+  const [feedback, setFeedback] = useState(null);
 
   useEffect(() => {
     const unsubscribe = onSnapshot(collection(db, "users"), (snapshot) => {
-      setUsers(snapshot.docs.map((doc) => ({ ...doc.data(), id: doc.id })));
+      setUsers(snapshot.docs.map((item) => ({ ...item.data(), id: item.id })));
       setUsersLoading(false);
     });
 
     return () => unsubscribe();
   }, []);
 
-  const handleOpenAddUserDialog = () => {
-    setAddUserDialogOpen(true);
+  const filteredUsers = useMemo(() => {
+    const term = normalize(searchTerm);
+
+    return users.filter((user) => {
+      const active = isActiveRecord(user);
+      if (!showInactive && !active) return false;
+      if (!term) return true;
+
+      return [user.fullName, user.email, user.role]
+        .map(normalize)
+        .some((value) => value.includes(term));
+    });
+  }, [searchTerm, showInactive, users]);
+
+  const updateForm = (field) => (event) => {
+    setForm((current) => ({ ...current, [field]: event.target.value }));
   };
 
-  const handleCloseAddUserDialog = () => {
-    setAddUserDialogOpen(false);
-    setName("");
-    setEmail("");
-    setPassword("");
+  const openCreateDialog = () => {
+    setSelectedUser(null);
+    setForm(emptyForm);
+    setDialogOpen(true);
   };
 
-  const handleSaveUser = async () => {
+  const openEditDialog = (user) => {
+    setSelectedUser(user);
+    setForm({
+      fullName: user?.fullName || "",
+      email: user?.email || "",
+      password: "",
+      role: user?.role || "technician",
+    });
+    setDialogOpen(true);
+  };
+
+  const closeDialog = () => {
+    setDialogOpen(false);
+    setSelectedUser(null);
+    setForm(emptyForm);
+  };
+
+  const saveUser = async () => {
     try {
-      setLoading(true);
-      const userData = {
-        fullName,
-        email,
-        role,
-      };
-      createUser({ email, password, fullName, role })
-        .then((result) => {
-          console.log("User created:", result.data);
-          handleCloseAddUserDialog();
-        })
-        .catch((error) => {
-          console.error("Error creating user:", error);
-        });
+      setSaving(true);
 
-        setUsers((prevUsers) => [...prevUsers, { fullName, email, role }]); // Update table
-      handleCloseAddUserDialog();
+      if (selectedUser) {
+        await updateDoc(doc(db, "users", selectedUser.id), {
+          fullName: form.fullName.trim(),
+          role: form.role,
+          updatedAt: serverTimestamp(),
+        });
+        setFeedback({ severity: "success", message: "User updated." });
+      } else {
+        await createUser({
+          email: form.email.trim(),
+          password: form.password,
+          fullName: form.fullName.trim(),
+          role: form.role,
+        });
+        setFeedback({ severity: "success", message: "User created." });
+      }
+
+      closeDialog();
     } catch (error) {
       console.error(error);
+      setFeedback({ severity: "error", message: "User could not be saved." });
+    } finally {
+      setSaving(false);
     }
-    setLoading(false);
   };
 
-  const handleChange = (event) => {
-    setRole(event.target.value);
+  const deactivateUser = async (user) => {
+    try {
+      await updateDoc(doc(db, "users", user.id), {
+        active: false,
+        archivedAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+      setFeedback({ severity: "success", message: "User deactivated." });
+    } catch (error) {
+      console.error(error);
+      setFeedback({ severity: "error", message: "User could not be deactivated." });
+    }
   };
 
+  const restoreUser = async (user) => {
+    try {
+      await updateDoc(doc(db, "users", user.id), {
+        active: true,
+        archivedAt: null,
+        updatedAt: serverTimestamp(),
+      });
+      setFeedback({ severity: "success", message: "User restored." });
+    } catch (error) {
+      console.error(error);
+      setFeedback({ severity: "error", message: "User could not be restored." });
+    }
+  };
 
-const [searchTerm, setSearchTerm] = useState("");
-const [filteredUsers, setFilteredUsers] = useState(users);
-
-const handleSearch = (event) => {
-  setSearchTerm(event.target.value.toLowerCase());
-};
-
-const filterUsers = () => {
-  const filteredData = users.filter((user) => {
-    const fullName = user.fullName.toLowerCase();
-    const email = user.email.toLowerCase();
-    return fullName.includes(searchTerm) || email.includes(searchTerm);
-  });
-  setFilteredUsers(filteredData);
-};
-
-useEffect(() => {
-  filterUsers();
-}, [searchTerm, users]);
-
+  const isEdit = Boolean(selectedUser);
+  const canSave =
+    form.fullName.trim() !== "" &&
+    form.role.trim() !== "" &&
+    (isEdit || (form.email.trim() !== "" && form.password.trim() !== ""));
 
   return (
     <div>
-      {/* <div
-        style={{
-          width: "100%",
-          display: "flex",
-          flexDirection: "row",
-          alignItems: "center",
-        }}
-      > */}
-      <div
-        style={{
-          display: "flex",
-          flexDirection: "row",
-          justifyContent: "center",
-          alignItems: "center",
-          marginBottom: "20px",
-        }}
+      <Stack
+        direction={{ xs: "column", md: "row" }}
+        spacing={2}
+        alignItems={{ xs: "stretch", md: "center" }}
+        sx={{ mb: 2 }}
       >
-        <div
-          style={{
-            display: "flex",
-            flex: 1,
-            alignItems: "center",
-            justifyContent: "center",
+        <TextField
+          value={searchTerm}
+          onChange={(event) => setSearchTerm(event.target.value)}
+          label="Search users"
+          type="search"
+          fullWidth
+          size="small"
+          InputProps={{
+            startAdornment: (
+              <InputAdornment position="start">
+                <Search />
+              </InputAdornment>
+            ),
           }}
-        >
-          <TextField
-            value={searchTerm}
-            onChange={handleSearch}
-            label="Search"
-            type="search"
-            fullWidth
-            size="small"
-            InputProps={{
-              startAdornment: (
-                <InputAdornment position="start">
-                  <Search />
-                </InputAdornment>
-              ),
-            }}
-            // sx={{ mb: 2 }}
-          />
-        </div>
-        <div
-          style={{
-            display: "flex",
-            flex: 1,
-            alignItems: "center",
-            justifyContent: "end",
-          }}
-        >
-          <Button
-            type="submit"
-            variant="contained"
-            color="primary"
-            disabled={loading}
-            onClick={() => handleOpenAddUserDialog()}
-          >
-            {loading ? <CircularProgress size={24} /> : "Add User"}
-          </Button>
-        </div>
-      </div>
-      {/* </div> */}
-      <div>
-        {!usersLoading ? (
-          <UserTable users={filteredUsers} />
-        ) : (
-          <CircularProgress size={54} />
-        )}
-      </div>
+        />
+        <FormControlLabel
+          control={
+            <Switch
+              checked={showInactive}
+              onChange={(event) => setShowInactive(event.target.checked)}
+            />
+          }
+          label="Show inactive"
+          sx={{ whiteSpace: "nowrap" }}
+        />
+        <Button variant="contained" disabled={saving} onClick={openCreateDialog}>
+          {saving ? <CircularProgress size={24} color="inherit" /> : "Add User"}
+        </Button>
+      </Stack>
 
-      <Dialog open={addUserDialogOpen} onClose={handleCloseAddUserDialog}>
-        <DialogTitle>Add User</DialogTitle>
-        <DialogContent
-          style={{
-            display: "flex",
-            flexDirection: "column",
-            paddingTop: "10px",
-            alignItems: "center",
-          }}
-        >
+      {!usersLoading ? (
+        <UserTable
+          users={filteredUsers}
+          currentUid={authUser?.uid}
+          onEdit={openEditDialog}
+          onArchive={deactivateUser}
+          onRestore={restoreUser}
+        />
+      ) : (
+        <CircularProgress size={54} />
+      )}
+
+      <Dialog open={dialogOpen} onClose={closeDialog} fullWidth maxWidth="sm">
+        <DialogTitle>{isEdit ? "Edit User" : "Add User"}</DialogTitle>
+        <DialogContent sx={{ display: "flex", flexDirection: "column", gap: 2, pt: 1 }}>
           <TextField
-            error={fullName === ""}
-            style={{ marginBottom: "10px" }}
+            autoFocus
+            required
             label="Name"
-            value={fullName}
-            onChange={(e) => setName(e.target.value)}
+            value={form.fullName}
+            onChange={updateForm("fullName")}
             fullWidth
           />
           <TextField
-            error={email === ""}
-            style={{ marginBottom: "10px" }}
+            required
             label="Email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
+            value={form.email}
+            onChange={updateForm("email")}
             type="email"
             fullWidth
+            disabled={isEdit}
+            helperText={isEdit ? "Login email cannot be changed here." : ""}
           />
-          <TextField
-            error={password === ""}
-            style={{ marginBottom: "10px" }}
-            label="Password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            type="password"
-            fullWidth
-          />
-          <RadioGroup
-            row
-            name="controlled-radio-buttons-group"
-            value={role}
-            onChange={handleChange}
-          >
-            <FormControlLabel
-              value="technician"
-              control={<Radio />}
-              label="Technician"
+          {!isEdit ? (
+            <TextField
+              required
+              label="Password"
+              value={form.password}
+              onChange={updateForm("password")}
+              type="password"
+              fullWidth
             />
-            <FormControlLabel
-              value="receptionist"
-              control={<Radio />}
-              label="Receptionist"
-            />
-            <FormControlLabel value="admin" control={<Radio />} label="Admin" />
-          </RadioGroup>
+          ) : null}
+          <FormControl>
+            <FormLabel>Role</FormLabel>
+            <RadioGroup row value={form.role} onChange={updateForm("role")}>
+              <FormControlLabel value="technician" control={<Radio />} label="Technician" />
+              <FormControlLabel value="receptionist" control={<Radio />} label="Receptionist" />
+              <FormControlLabel value="admin" control={<Radio />} label="Admin" />
+            </RadioGroup>
+          </FormControl>
         </DialogContent>
         <DialogActions>
-          <Button onClick={handleCloseAddUserDialog}>Cancel</Button>
-          <Button
-            disabled={
-              fullName.trim() === "" ||
-              email.trim() === "" ||
-              password.trim() === ""
-            }
-            onClick={handleSaveUser}
-          >
-            {loading ? <CircularProgress size={24} /> : "Save"}
+          <Button onClick={closeDialog}>Cancel</Button>
+          <Button disabled={!canSave || saving} onClick={saveUser}>
+            {saving ? <CircularProgress size={20} /> : "Save"}
           </Button>
         </DialogActions>
       </Dialog>
+
+      <Snackbar
+        open={Boolean(feedback)}
+        autoHideDuration={3200}
+        onClose={() => setFeedback(null)}
+        anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
+      >
+        {feedback ? (
+          <Alert onClose={() => setFeedback(null)} severity={feedback.severity} sx={{ width: "100%" }}>
+            {feedback.message}
+          </Alert>
+        ) : null}
+      </Snackbar>
     </div>
   );
 };

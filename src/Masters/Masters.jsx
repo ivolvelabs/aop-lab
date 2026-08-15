@@ -1,5 +1,5 @@
 
-import { Box, Tab, TabList, TabPanel, Tabs } from "@mui/material";
+import { Box, Tab, Tabs } from "@mui/material";
 import Categories from "./Categories/Categories";
 import SubCategories from "./SubCategories/SubCategories";
 import ItemNames from "./ItemNames/ItemNames";

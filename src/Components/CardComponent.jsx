@@ -1,52 +1,97 @@
 import * as React from "react";
-import Box from "@mui/material/Box";
 import Card from "@mui/material/Card";
-import CardActions from "@mui/material/CardActions";
 import CardContent from "@mui/material/CardContent";
 import Button from "@mui/material/Button";
 import Typography from "@mui/material/Typography";
-import { useNavigate, NavLink } from "react-router-dom";
-import { useTheme } from "@emotion/react";
-import KeyboardDoubleArrowRightIcon from "@mui/icons-material/KeyboardDoubleArrowRight";
-import { CircularProgress } from "@mui/material";
+import { Box, CircularProgress, Stack } from "@mui/material";
+import { NavLink } from "react-router-dom";
+import { useTheme } from "@mui/material/styles";
+import ArrowForwardRoundedIcon from "@mui/icons-material/ArrowForwardRounded";
 
-
-export default function CardComponent({ cardType, pendingCount, section, sectionPath}) {
-const navigate = useNavigate();
-const theme = useTheme();
-
+export default function CardComponent({
+  cardType,
+  value,
+  pendingCount,
+  section,
+  sectionPath,
+  caption,
+  icon,
+  colorKey = "primary",
+}) {
+  const theme = useTheme();
+  const displayValue = value ?? pendingCount;
+  const accentColor = theme.palette[colorKey]?.main || theme.palette.primary.main;
 
   return (
     <Card
       sx={{
-        minWidth: "45%",
+        minWidth: { xs: "100%", md: 0 },
+        flex: 1,
         display: "flex",
         flexDirection: "column",
-        alignItems: "center",
-        padding: "30px",
+        justifyContent: "space-between",
+        p: 0,
+        overflow: "hidden",
+        position: "relative",
+        "&::before": {
+          content: '""',
+          position: "absolute",
+          inset: 0,
+          borderTop: `4px solid ${accentColor}`,
+          pointerEvents: "none",
+        },
       }}
     >
-      <CardContent sx={{ textAlign: "center" }}>
-        <Typography sx={{ fontSize: 28 }} gutterBottom>
-          {cardType}
+      <CardContent sx={{ p: 2.5 }}>
+        <Stack direction="row" justifyContent="space-between" alignItems="flex-start" gap={2}>
+          <Box sx={{ minWidth: 0 }}>
+            <Typography sx={{ fontSize: 15, fontWeight: 800, color: "text.secondary" }}>
+            {cardType}
+          </Typography>
+            <Typography
+              sx={{ color: accentColor, fontWeight: 900, lineHeight: 1.05, mt: 1 }}
+              variant="h3"
+              component="div"
+            >
+              {displayValue === null || displayValue === undefined ? (
+                <CircularProgress size={34} />
+              ) : (
+                displayValue
+              )}
+            </Typography>
+          </Box>
+          {icon ? (
+            <Box
+              sx={{
+                width: 46,
+                height: 46,
+                borderRadius: 2,
+                bgcolor: `${accentColor}14`,
+                display: "grid",
+                placeItems: "center",
+                flexShrink: 0,
+              }}
+            >
+              {icon}
+            </Box>
+          ) : null}
+        </Stack>
+        <Typography sx={{ color: "text.secondary", mt: 1.5, minHeight: 42 }} variant="body2">
+          {caption || "Live snapshot from current booking records."}
         </Typography>
-        <Typography
-          sx={{ color: theme.palette.primary.main }}
-          variant="h1"
-          component="div"
-        >
-          {pendingCount ? pendingCount : <CircularProgress size={44} />}
-        </Typography>
+        <Box sx={{ mt: 2 }}>
+          <Button
+            variant="text"
+            size="small"
+            endIcon={<ArrowForwardRoundedIcon />}
+            component={NavLink}
+            to={sectionPath}
+            sx={{ px: 0, color: accentColor, fontWeight: 800 }}
+          >
+            Open {section}
+          </Button>
+        </Box>
       </CardContent>
-      <CardActions>
-        <Button
-          variant="contained"
-          size="large"
-          endIcon={<KeyboardDoubleArrowRightIcon />}
-        >
-          <NavLink to={sectionPath}>Go to {section}</NavLink>
-        </Button>
-      </CardActions>
     </Card>
   );
 }

@@ -1,239 +1,259 @@
-import React, { useState, useEffect } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
-  CircularProgress,
   Button,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  TextField,
-  InputAdornment,
-  Grid,
   Card,
-  CardContent,
-  Typography,
   CardActions,
+  CardContent,
+  Chip,
+  CircularProgress,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  FormControlLabel,
+  Grid,
+  IconButton,
+  InputAdornment,
+  Stack,
+  Switch,
+  TextField,
+  Tooltip,
+  Typography,
 } from "@mui/material";
 import {
+  ArchiveOutlined,
+  EditOutlined,
+  RestoreOutlined,
+  Search,
+} from "@mui/icons-material";
+import {
   collection,
-  addDoc,
-  getDocs,
+  doc,
   onSnapshot,
-  serverTimestamp,
   orderBy,
   query,
-  doc,
+  serverTimestamp,
   setDoc,
+  updateDoc,
 } from "firebase/firestore";
-import { db } from "../../firebase"; // Assuming your Firestore instance is imported here
-import { Search } from "@mui/icons-material";
-import { useTheme } from "@emotion/react";
+import { useTheme } from "@mui/material/styles";
 import { useNavigate } from "react-router-dom";
+import { db } from "../../firebase";
+
+const isActiveRecord = (record) =>
+  record?.active !== false && !record?.archivedAt;
+
+const normalize = (value) => String(value || "").toLowerCase().trim();
 
 const Category = () => {
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [addCategoryDialogOpen, setAddCategoryDialogOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [selectedCategory, setSelectedCategory] = useState(null);
   const [name, setName] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
-  // const [categoryRn, setCategoryRn] = useState(0);
+  const [showArchived, setShowArchived] = useState(false);
 
   const theme = useTheme();
   const navigate = useNavigate();
 
   useEffect(() => {
     const q = query(collection(db, "categories"), orderBy("createdAt", "desc"));
-
     const unsubscribe = onSnapshot(q, (querySnapshot) => {
-      const filteredCategories = querySnapshot.docs.filter((doc) => {
-        const data = doc.data();
-        return data.name.toLowerCase().includes(searchTerm.toLowerCase());
-      });
-      setCategories(
-        filteredCategories.map((doc) => ({ ...doc.data(), id: doc.id }))
-      );
-
+      setCategories(querySnapshot.docs.map((item) => ({ ...item.data(), id: item.id })));
       setLoading(false);
     });
 
     return () => unsubscribe();
-  }, [searchTerm]);
+  }, []);
 
-  const handleSearch = (event) => {
-    setSearchTerm(event.target.value.toLowerCase());
+  const filteredCategories = useMemo(() => {
+    const term = normalize(searchTerm);
+
+    return categories.filter((category) => {
+      const active = isActiveRecord(category);
+      if (!showArchived && !active) return false;
+      if (!term) return true;
+      return normalize(category.name).includes(term);
+    });
+  }, [categories, searchTerm, showArchived]);
+
+  const openCreateDialog = () => {
+    setSelectedCategory(null);
+    setName("");
+    setDialogOpen(true);
   };
 
-  const handleOpenAddCategoryDialog = () => {
-    setAddCategoryDialogOpen(true);
+  const openEditDialog = (category) => {
+    setSelectedCategory(category);
+    setName(category?.name || "");
+    setDialogOpen(true);
   };
 
-  const handleCloseAddCategoryDialog = () => {
-    setAddCategoryDialogOpen(false);
+  const closeDialog = () => {
+    setDialogOpen(false);
+    setSelectedCategory(null);
     setName("");
   };
 
-  const handleSaveCategory = async () => {
+  const saveCategory = async () => {
     try {
-      const year = new Date().getFullYear().toString().substring(2);
-      setLoading(true);
-      const categoryData = {
-        name,
-        createdAt: serverTimestamp(),
-        years: [
-          {
-            year: year,
-            rnSeries: `AOP/${name.substring(0, 1).toUpperCase()}/${year}`,
-            crNumber: 0,
-          },
-        ],
-      };
-      // const categoryData = {
-      //   name,
-      //   createdAt: serverTimestamp(),
-      //   crnSeries: `AOP/${name.substring(0, 1).toUpperCase()}`,
-      //   crNumber: "0",
-      //   crnYear: year,
-      // };
-      const docRef = doc(collection(db, "categories"));
-      await setDoc(docRef, {...categoryData, id: docRef.id});
-      const q = query(
-        collection(db, "categories"),
-        orderBy("createdAt", "desc")
-      );
-      const unsubscribe = onSnapshot(q, (querySnapshot) => {
-        setCategories(
-          querySnapshot.docs.map((doc) => ({ ...doc.data(), id: doc.id }))
-        );
-        handleCloseAddCategoryDialog();
-      });
-      return () => unsubscribe();
+      setSaving(true);
+
+      if (selectedCategory) {
+        await updateDoc(doc(db, "categories", selectedCategory.id), {
+          name: name.trim(),
+          updatedAt: serverTimestamp(),
+        });
+      } else {
+        const year = new Date().getFullYear().toString().substring(2);
+        const docRef = doc(collection(db, "categories"));
+        await setDoc(docRef, {
+          id: docRef.id,
+          name: name.trim(),
+          active: true,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+          years: [
+            {
+              year,
+              rnSeries: `AOP/${name.trim().substring(0, 1).toUpperCase()}/${year}`,
+              crNumber: 0,
+            },
+          ],
+        });
+      }
+
+      closeDialog();
     } catch (error) {
-      console.error("Error adding category:", error);
+      console.error("Error saving category:", error);
     } finally {
-      setLoading(false);
+      setSaving(false);
     }
+  };
+
+  const archiveCategory = async (category) => {
+    await updateDoc(doc(db, "categories", category.id), {
+      active: false,
+      archivedAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+  };
+
+  const restoreCategory = async (category) => {
+    await updateDoc(doc(db, "categories", category.id), {
+      active: true,
+      archivedAt: null,
+      updatedAt: serverTimestamp(),
+    });
   };
 
   return (
     <div style={{ width: "100%" }}>
-      <div
-        style={{
-          display: "flex",
-          width: "100%",
-          flexDirection: "row",
-          justifyContent: "center",
-          alignItems: "center",
-          margin: "10px",
-        }}
-      >
-        <div
-          style={{
-            display: "flex",
-            flex: 1,
-            alignItems: "center",
-            justifyContent: "center",
+      <Stack direction={{ xs: "column", md: "row" }} spacing={2} sx={{ my: 2 }}>
+        <TextField
+          value={searchTerm}
+          onChange={(event) => setSearchTerm(event.target.value)}
+          type="search"
+          label="Search categories"
+          fullWidth
+          size="small"
+          InputProps={{
+            startAdornment: (
+              <InputAdornment position="start">
+                <Search />
+              </InputAdornment>
+            ),
           }}
-        >
-          <TextField
-            value={searchTerm}
-            onChange={handleSearch}
-            type="search"
-            fullWidth
-            size="small"
-            InputProps={{
-              startAdornment: (
-                <InputAdornment position="start">
-                  <Search />
-                </InputAdornment>
-              ),
-            }}
-          />
-        </div>
-        <div
-          style={{
-            display: "flex",
-            flex: 1,
-            alignItems: "center",
-            justifyContent: "end",
-          }}
-        >
-          <Button
-            type="submit"
-            variant="contained"
-            color="primary"
-            disabled={loading}
-            onClick={handleOpenAddCategoryDialog}
-          >
-            {loading ? <CircularProgress size={24} /> : "Add Category"}
-          </Button>
-        </div>
-      </div>
+        />
+        <FormControlLabel
+          control={
+            <Switch
+              checked={showArchived}
+              onChange={(event) => setShowArchived(event.target.checked)}
+            />
+          }
+          label="Show archived"
+          sx={{ whiteSpace: "nowrap" }}
+        />
+        <Button variant="contained" disabled={loading} onClick={openCreateDialog}>
+          {loading ? <CircularProgress size={24} color="inherit" /> : "Add Category"}
+        </Button>
+      </Stack>
 
-      <Dialog
-        open={addCategoryDialogOpen}
-        onClose={handleCloseAddCategoryDialog}
-      >
-        <DialogTitle>Add Category</DialogTitle>
-        <DialogContent>
+      <Dialog open={dialogOpen} onClose={closeDialog} fullWidth maxWidth="sm">
+        <DialogTitle>{selectedCategory ? "Edit Category" : "Add Category"}</DialogTitle>
+        <DialogContent sx={{ pt: 1 }}>
           <TextField
-            error={name === ""}
-            style={{ marginBottom: "10px" }}
+            autoFocus
+            required
             label="Name"
             value={name}
-            onChange={(e) => setName(e.target.value)}
+            onChange={(event) => setName(event.target.value)}
             fullWidth
           />
         </DialogContent>
         <DialogActions>
-          <Button onClick={handleCloseAddCategoryDialog}>Cancel</Button>
-          <Button disabled={name.trim() === ""} onClick={handleSaveCategory}>
-            {loading ? <CircularProgress size={24} /> : "Save"}
+          <Button onClick={closeDialog}>Cancel</Button>
+          <Button disabled={name.trim() === "" || saving} onClick={saveCategory}>
+            {saving ? <CircularProgress size={20} /> : "Save"}
           </Button>
         </DialogActions>
       </Dialog>
 
-      <div>
-        {!loading && categories.length > 0 ? (
-          <Grid container spacing={2}>
-            {categories.map((category) => (
-              <Grid item xs={3} key={category.id}>
-                <Card
-                  sx={{ borderLeft: `${theme.palette.primary.main} 5px solid` }}
-                >
+      {!loading && filteredCategories.length > 0 ? (
+        <Grid container spacing={2}>
+          {filteredCategories.map((category) => {
+            const active = isActiveRecord(category);
+
+            return (
+              <Grid item xs={12} sm={6} md={4} key={category.id}>
+                <Card sx={{ borderLeft: `${theme.palette.primary.main} 5px solid`, opacity: active ? 1 : 0.68 }}>
                   <CardContent>
-                    <Typography
-                      sx={{
-                        color: theme.palette.primary.main,
-                        overflowWrap: "break-word",
-                      }}
-                      variant="h6"
-                    >
-                      {category.name}
-                    </Typography>
-                    {/* You can add more content to the card based on your category data */}
+                    <Stack direction="row" spacing={1} alignItems="center">
+                      <Typography sx={{ color: theme.palette.primary.main, overflowWrap: "break-word" }} variant="h6">
+                        {category.name}
+                      </Typography>
+                      <Chip
+                        size="small"
+                        label={active ? "Active" : "Archived"}
+                        color={active ? "success" : "default"}
+                        variant={active ? "filled" : "outlined"}
+                      />
+                    </Stack>
                   </CardContent>
                   <CardActions>
-                    <Button
-                      size="small"
-                      color="primary"
-                      onClick={(e) => {
-                        e.preventDefault();
-                        navigate(`/masters/${category.id}`);
-                      }}
-                    >
+                    <Button size="small" onClick={() => navigate(`/masters/${category.id}`)}>
                       Open
                     </Button>
+                    <Tooltip title="Edit">
+                      <IconButton size="small" onClick={() => openEditDialog(category)}>
+                        <EditOutlined fontSize="small" />
+                      </IconButton>
+                    </Tooltip>
+                    {active ? (
+                      <Tooltip title="Archive">
+                        <IconButton size="small" onClick={() => archiveCategory(category)}>
+                          <ArchiveOutlined fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                    ) : (
+                      <Tooltip title="Restore">
+                        <IconButton size="small" onClick={() => restoreCategory(category)}>
+                          <RestoreOutlined fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                    )}
                   </CardActions>
                 </Card>
               </Grid>
-            ))}
-          </Grid>
-        ) : (
-          <p>
-            {loading ? <CircularProgress size={54} /> : "No categories found."}
-          </p>
-        )}
-      </div>
+            );
+          })}
+        </Grid>
+      ) : (
+        <p>{loading ? <CircularProgress size={54} /> : "No categories found."}</p>
+      )}
     </div>
   );
 };

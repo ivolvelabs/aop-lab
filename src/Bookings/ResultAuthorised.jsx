@@ -1,42 +1,129 @@
 import { db } from "../firebase";
-import { updateDoc, doc } from "firebase/firestore";
+import { arrayUnion, updateDoc, doc } from "firebase/firestore";
 import { Button, CircularProgress } from "@mui/material";
-import { useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useReactToPrint } from "react-to-print";
 import "./ResultAuthorised.css";
-import { useTheme } from "@emotion/react";
-import { html2pdf } from "html2pdf.js";
+import { useTheme } from "@mui/material/styles";
 import { useAuth } from "../Contexts/AuthContext";
 import TaskAltIcon from "@mui/icons-material/TaskAlt";
 import FileDownloadIcon from "@mui/icons-material/FileDownload";
+import { sanitizeHtml } from "../utils/sanitizeHtml";
+import { toDateValue } from "../utils/dateFormat";
+import { buildWorkflowEvent } from "../utils/workflowAudit";
+
+const htmlHasVisibleContent = (value) => {
+  if (!value || typeof value !== "string") return false;
+
+  const textOnly = sanitizeHtml(value)
+    .replace(/<[^>]*>/g, " ")
+    .replace(/&nbsp;/g, " ")
+    .trim();
+
+  return textOnly.length > 0;
+};
+
+const textHasVisibleContent = (value) =>
+  typeof value === "string" && value.trim().length > 0;
+
+const formatReportDate = (value) => {
+  const date = toDateValue(value);
+  if (!date) return "-";
+
+  return date.toLocaleDateString("en-GB", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    timeZone: "Asia/Kolkata",
+  });
+};
+
+const SectionHeading = ({ children }) => (
+  <div className="report-section-heading">{children}</div>
+);
+
+const HtmlReportSection = ({ title, html }) => {
+  if (!htmlHasVisibleContent(html)) return null;
+
+  return (
+    <section className="report-section">
+      <SectionHeading>{title}</SectionHeading>
+      <div
+        className="report-rich-text"
+        dangerouslySetInnerHTML={{ __html: sanitizeHtml(html) }}
+      />
+    </section>
+  );
+};
+
+const TextReportSection = ({ title, text }) => {
+  if (!textHasVisibleContent(text)) return null;
+
+  return (
+    <section className="report-section">
+      <SectionHeading>{title}</SectionHeading>
+      <div className="report-rich-text">{text}</div>
+    </section>
+  );
+};
 
 function ResultAuthorised({ bookingData, handleUpdateStatesInfo, statesInfo }) {
-    const { isLoggedIn, authUser, role } = useAuth();
-
-console.log(role);
-// console.log(!role === "admin");
-
+  const { role, user } = useAuth();
   const theme = useTheme();
+  const contentToPrint = useRef(null);
 
-
-const getPageMargins = () => {
-  return `@page { margin: ${"0cm"} ${"0cm"} ${"0"} ${"0cm"} !important;}`;
-};
-
-const getCss = () => {
-  return `@media print { thead { display: table-header-group; } tfoot { display: table-footer-group; } td { padding: 5mm 25.4mm; } }`;
-  // return `@page { padding: 5cm 0cm 5cm 0cm }`;
-};
-
-  const pageStyle = {
-    width: "210mm",
-    height: "297mm",
-    overflowY: "scroll",
-    border: "2px solid black",
-  };
-
-  const [isCompleted, setIsCompleted] = useState(bookingData.isCompleted);
   const [isLoading, setIsLoading] = useState(false);
+  const [isReportAuthorized, setIsReportAuthorized] = useState(
+    Boolean(bookingData?.isCompleted)
+  );
+
+  useEffect(() => {
+    setIsReportAuthorized(Boolean(bookingData?.isCompleted));
+  }, [bookingData?.isCompleted]);
+
+  const reportData = useMemo(() => {
+    const stateList = Array.isArray(bookingData?.statesInfo)
+      ? bookingData.statesInfo
+      : Array.isArray(statesInfo)
+      ? statesInfo
+      : [];
+    const resultEnteredState = stateList.find(
+      (state) => state.state === "resultEntered"
+    );
+    const resultAuthorizedState = stateList.find(
+      (state) => state.state === "resultAuthorized"
+    );
+    const resultDetails = bookingData?.resultEnteredDetails || {};
+    const sections = Array.isArray(bookingData?.listOfSectionsDetails)
+      ? bookingData.listOfSectionsDetails.filter(
+          (item) =>
+            textHasVisibleContent(item?.name) ||
+            textHasVisibleContent(item?.description)
+        )
+      : [];
+
+    return {
+      category: bookingData?.typeOfSpecimen?.category || "PATHOLOGY",
+      serialNumber: bookingData?.serialNumber || "-",
+      patientName: bookingData?.patientName || "-",
+      age: bookingData?.age || "-",
+      sex: bookingData?.sex || "-",
+      referralDoctor: bookingData?.referralDoctor?.name || "-",
+      hospital: bookingData?.hospital?.name || "-",
+      receiptDate: formatReportDate(bookingData?.bookingDate),
+      reportingDate: formatReportDate(
+        resultEnteredState?.updatedAt ||
+          stateList[3]?.updatedAt ||
+          resultAuthorizedState?.updatedAt
+      ),
+      specimen: resultDetails.specimen,
+      diagnosis: resultDetails.diagnosis,
+      comments: bookingData?.comments,
+      microscopicDescription: resultDetails.microscopicDescription,
+      grossDescription: bookingData?.grossDescription,
+      sections,
+    };
+  }, [bookingData, statesInfo]);
 
   const handleAuthorise = async () => {
     setIsLoading(true);
@@ -47,21 +134,30 @@ const getCss = () => {
         if (state.state === "resultAuthorized") {
           return {
             ...state,
-            updatedAt: new Date().toString(),
+            isDone: true,
+            updatedAt: new Date(),
           };
         }
         return state;
       });
-      handleUpdateStatesInfo(updatedStatesInfo);
+
       const updates = {
         isCompleted: true,
         statesInfo: updatedStatesInfo,
+        workflowHistory: arrayUnion(
+          buildWorkflowEvent({
+            step: "resultAuthorized",
+            action: bookingData?.isCompleted
+              ? "Report re-authorized"
+              : "Report authorized",
+            user,
+          })
+        ),
       };
 
-      await updateDoc(bookingRef, updates).then(() => {
-        console.log("updated----");
-        setIsCompleted(true);
-      });
+      await updateDoc(bookingRef, updates);
+      handleUpdateStatesInfo(updatedStatesInfo);
+      setIsReportAuthorized(true);
     } catch (error) {
       console.error("Error saving data:", error);
     } finally {
@@ -69,296 +165,157 @@ const getCss = () => {
     }
   };
 
-
-  const Report = () => {
-    return (
-      <div style={pageStyle}>
-        <div
-          ref={contentToPrint}
-          style={{
-            display: "flex",
-            flexDirection: "column",
-            // padding: "0cm 2.54cm",
-            fontSize: "10px",
-            fontFamily: "Verdana",
-            overflowWrap: "break-word",
-            textAlign: "justify",
-            pageBreakAfter: "always",
-          }}
-        >
-          <style>{getPageMargins()}</style>
-
-          <div className="header">
-            <img src="/header.png" alt="Dr. Avani's Oncopath Lab Header" />
-          </div>
-          
-          <div className="footer">
-            <img src="/footer.png" alt="Dr. Avani's Oncopath Lab Footer" />
-          </div>
-
-          <div className="logo">
-            <img src="/logo.png" alt="Dr. Avani's Oncopath Lab" />
-          </div>
-
-          <table>
-            <thead>
-              <tr>
-                <th>
-                  <div class="page-header-space"></div>
-                  {/* <img
-                    src="/header.png"
-                    alt="Dr. Avani's Oncopath Lab Header"
-                  /> */}
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td>
-                  <h1
-                    style={{
-                      textAlign: "center",
-                      fontSize: "12px",
-                      fontWeight: "1000",
-                      marginBottom: "20px",
-                    }}
-                  >
-                    {bookingData.typeOfSpecimen.category} REPORT
-                  </h1>
-                  <div style={{ display: "flex", flexDirection: "row" }}>
-                    <p>
-                      <span>S. No: </span>
-                      <b>{bookingData.serialNumber}</b>
-                    </p>
-                  </div>
-                  <div>
-                    <div
-                      style={{
-                        display: "flex",
-                        flexDirection: "row",
-                        justifyContent: "space-between",
-                      }}
-                    >
-                      <p>
-                        <span>Patient Name: </span>
-                        <b>{bookingData.patientName}</b>
-                      </p>
-                      <p>
-                        <span>Age/Sex: </span>
-                        <b>
-                          {bookingData.age} / {bookingData.sex}
-                        </b>
-                      </p>
-                    </div>
-                    <div
-                      style={{
-                        display: "flex",
-                        flexDirection: "row",
-                        justifyContent: "space-between",
-                      }}
-                    >
-                      <p>
-                        <span>Referred : </span>
-                        <b>{bookingData.referralDoctor.name}</b>
-                      </p>
-                      <p>
-                        <span>Date of Receipt: </span>
-                        {/* <b>
-                          {new Date(bookingData.bookingDate).toLocaleDateString(
-                            "en-GB"
-                          )}
-                        </b> */}
-                          <b>{bookingData.bookingDate.toLocaleDateString("en-GB")}</b>
-                      </p>
-                    </div>
-                    <div
-                      style={{
-                        display: "flex",
-                        flexDirection: "row",
-                        justifyContent: "space-between",
-                      }}
-                    >
-                      <p>
-                        <span>Hospital Name:</span>
-                        <b>{bookingData.hospital.name}</b>
-                      </p>
-                      <p>
-                        <span>Date of Reporting:</span>
-                        <b>
-                          {new Date(
-                            bookingData.statesInfo[3].updatedAt
-                          ).toLocaleDateString("en-GB")}
-                        </b>
-                      </p>
-                    </div>
-                  </div>
-                  <hr
-                    class="solid"
-                    style={{
-                      width: "110%",
-                      position: "relative",
-                      left: "-5%",
-                      border: `1px solid ${theme.palette.primary.main}`,
-                      margin: "20px 0px",
-                    }}
-                  />
-                  <div style={{ margin: "20px 0px" }}>
-                    <div style={{ fontSize: "12px", fontWeight: "1000" }}>
-                      SPECIMEN
-                    </div>
-                    <div
-                      dangerouslySetInnerHTML={{
-                        __html: bookingData.resultEnteredDetails.specimen,
-                      }}
-                    />
-                  </div>
-                  <div style={{ margin: "20px 0px" }}>
-                    <div style={{ fontSize: "12px", fontWeight: "1000" }}>
-                      DIAGNOSIS
-                    </div>
-                    <div
-                      dangerouslySetInnerHTML={{
-                        __html: bookingData.resultEnteredDetails.diagnosis,
-                      }}
-                    />
-                  </div>
-                  <div style={{ margin: "20px 0px" }}>
-                    <div style={{ fontSize: "12px", fontWeight: "1000" }}>
-                      COMMENTS
-                    </div>
-                    <span>{bookingData.comments}</span>
-                  </div>
-                  <div style={{ margin: "20px 0px" }}>
-                    <div style={{ fontSize: "12px", fontWeight: "1000" }}>
-                      MICROSCOPIC FINDINGS
-                    </div>
-                    <div
-                      dangerouslySetInnerHTML={{
-                        __html:
-                          bookingData.resultEnteredDetails
-                            .microscopicDescription,
-                      }}
-                    />
-                  </div>
-                  <div style={{ margin: "20px 0px" }}>
-                    <div style={{ fontSize: "12px", fontWeight: "1000" }}>
-                      GROSS FINDINGS
-                    </div>
-                    <div
-                      dangerouslySetInnerHTML={{
-                        __html: bookingData.grossDescription,
-                      }}
-                    />
-                  </div>
-                  <div style={{ margin: "20px 0px" }}>
-                    <div style={{ fontSize: "12px", fontWeight: "1000" }}>
-                      LIST of SECTIONS
-                    </div>
-                    {bookingData?.listOfSectionsDetails.map((i) => {
-                      return (
-                        <ul>
-                          <li>
-                            <b>
-                              {i.name.length > 0 ? (
-                                <>
-                                  <span>{i.prefix + " " + i.name}</span>
-                                </>
-                              ) : (
-                                <span>{i.description}</span>
-                              )}
-                            </b>
-                          </li>
-                        </ul>
-                      );
-                    })}
-                  </div>
-                </td>
-              </tr>
-            </tbody>
-            <tfoot>
-              <tr>
-                <th>
-                  <div class="page-footer-space"></div>
-                  {/* <img
-                    className="footer"
-                    src="/footer.png"
-                    alt="Dr. Avani's Oncopath Lab Footer"
-                  /> */}
-                </th>
-              </tr>
-            </tfoot>
-          </table>
-          <style>{getCss()}</style>
-        </div>
-      </div>
-    );
-  };
-
-  const contentToPrint = useRef(null);
   const handlePrint = useReactToPrint({
-   
-    documentTitle: `${bookingData.serialNumber} - ${bookingData.patientName}`,
-    onBeforePrint: () => console.log("before printing..."),
-    onAfterPrint: () => console.log("after printing..."),
+    content: () => contentToPrint.current,
+    documentTitle: `${reportData.serialNumber} - ${reportData.patientName}`,
     removeAfterPrint: true,
+    pageStyle: "@page { size: A4; margin: 0; }",
   });
 
+  const Report = () => (
+    <div className="report-page-shell">
+      <article ref={contentToPrint} className="report-print-root">
+        <div className="report-fixed-header">
+          <img src="/header.png" alt="Dr. Avani's Oncopath Lab Header" />
+        </div>
 
+        <div className="report-watermark" aria-hidden="true">
+          <img src="/logo.png" alt="" />
+        </div>
+
+        <div className="report-fixed-footer">
+          <img src="/footer.png" alt="Dr. Avani's Oncopath Lab Footer" />
+        </div>
+
+        <div className="report-content">
+          <h1 className="report-title">{reportData.category} REPORT</h1>
+
+          <div className="report-meta report-meta-single">
+            <p>
+              <span>S. No: </span>
+              <b>{reportData.serialNumber}</b>
+            </p>
+          </div>
+
+          <div className="report-meta">
+            <p>
+              <span>Patient Name: </span>
+              <b>{reportData.patientName}</b>
+            </p>
+            <p>
+              <span>Age/Sex: </span>
+              <b>
+                {reportData.age} / {reportData.sex}
+              </b>
+            </p>
+          </div>
+
+          <div className="report-meta">
+            <p>
+              <span>Referred : </span>
+              <b>{reportData.referralDoctor}</b>
+            </p>
+            <p>
+              <span>Date of Receipt: </span>
+              <b>{reportData.receiptDate}</b>
+            </p>
+          </div>
+
+          <div className="report-meta">
+            <p>
+              <span>Hospital Name: </span>
+              <b>{reportData.hospital}</b>
+            </p>
+            <p>
+              <span>Date of Reporting: </span>
+              <b>{reportData.reportingDate}</b>
+            </p>
+          </div>
+
+          <hr
+            className="report-divider"
+            style={{ borderColor: theme.palette.primary.main }}
+          />
+
+          <HtmlReportSection title="SPECIMEN" html={reportData.specimen} />
+          <HtmlReportSection title="DIAGNOSIS" html={reportData.diagnosis} />
+          <TextReportSection title="COMMENTS" text={reportData.comments} />
+          <HtmlReportSection
+            title="MICROSCOPIC FINDINGS"
+            html={reportData.microscopicDescription}
+          />
+          <HtmlReportSection
+            title="GROSS FINDINGS"
+            html={reportData.grossDescription}
+          />
+
+          {reportData.sections.length > 0 ? (
+            <section className="report-section">
+              <SectionHeading>LIST of SECTIONS</SectionHeading>
+              <ul className="report-section-list">
+                {reportData.sections.map((item, index) => {
+                  const sectionName = [item.prefix, item.name]
+                    .filter(Boolean)
+                    .join(" ")
+                    .trim();
+
+                  return (
+                    <li
+                      key={`${sectionName || "section"}-${
+                        item.description || ""
+                      }-${index}`}
+                    >
+                      <b>
+                        {sectionName ? <span>{sectionName}</span> : null}
+                        {sectionName && item.description ? " : " : null}
+                        {item.description ? (
+                          <span>{item.description}</span>
+                        ) : null}
+                      </b>
+                    </li>
+                  );
+                })}
+              </ul>
+            </section>
+          ) : null}
+        </div>
+      </article>
+    </div>
+  );
 
   return (
     <div>
       {bookingData ? (
-        <div
-          style={{
-            display: "flex",
-            flexDirection: "column",
-            justifyContent: "center",
-            alignItems: "center",
-          }}
-        >
+        <div className="report-authorized-screen">
           <Report />
-          <div
-            style={{
-              display: "flex",
-              width: "100%",
-              justifyContent: "space-evenly",
-              margin: "10px",
-            }}
-          >
-            <div style={{ display: "flex", flexDirection: "column" }}>
+          <div className="report-actions">
+            <div className="report-primary-action">
               <Button
                 variant="contained"
-                disabled={!bookingData.isCompleted}
-                onClick={() => {
-                  handlePrint(null, () => contentToPrint.current);
-                }}
+                disabled={!isReportAuthorized}
+                onClick={handlePrint}
                 style={{ padding: "10px 20px" }}
                 startIcon={<FileDownloadIcon />}
               >
                 Generate Report
-                {isLoading && <CircularProgress size="small" />}
+                {isLoading && <CircularProgress size={16} color="inherit" />}
               </Button>
-              <p style={{ color: "#b71c1c", fontWeight: "900" }}>
-                Report Authorisation Pending
-              </p>
+              {!isReportAuthorized ? (
+                <p className="report-pending-text">
+                  Report Authorisation Pending
+                </p>
+              ) : null}
             </div>
             {role === "admin" ? (
               <Button
                 variant="contained"
                 onClick={handleAuthorise}
+                disabled={isLoading}
                 startIcon={<TaskAltIcon />}
-                // disabled={role === ("receptionist" || "technician") }
               >
-                Authorise
+                {isReportAuthorized ? "Re-authorise" : "Authorise"}
               </Button>
             ) : null}
-            {/* <Button
-              variant="outlined"
-              onClick={handleAuthorise}
-              // disabled={role === ("receptionist" || "technician") }
-            >
-              Authorise
-            </Button> */}
           </div>
         </div>
       ) : (

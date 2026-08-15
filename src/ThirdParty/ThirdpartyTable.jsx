@@ -1,117 +1,220 @@
-import React, { useState, useEffect } from "react";
+import React from "react";
 import {
-  TableContainer,
+  Box,
+  Chip,
+  IconButton,
+  Paper,
+  Stack,
   Table,
-  TableHead,
-  TableRow,
   TableBody,
   TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  Tooltip,
+  Typography,
   tableCellClasses,
-  Paper,
-  Button,
-  TextField,
-  IconButton,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
 } from "@mui/material";
-import { useTheme } from "@emotion/react";
-import { DeleteOutlineRounded } from "@mui/icons-material";
+import { useTheme } from "@mui/material/styles";
+import {
+  ArchiveOutlined,
+  BlockOutlined,
+  EditOutlined,
+  KeyOutlined,
+  LockOpenOutlined,
+  LockResetOutlined,
+  RestoreOutlined,
+} from "@mui/icons-material";
 import styled from "@emotion/styled";
 
-const ThirdpartyTable = ({ thirdParties }) => {
-  const theme = useTheme();
-
-  const [editDialogOpen, setEditDialogOpen] = useState(false);
-  const [selectedThirdPartyId, setSelectedThirdPartyId] = useState(null);
-  const [editName, setEditName] = useState("");
-  const [editType, setEditType] = useState("");
-  const [editAddress, setEditAddress] = useState("");
-  const [editEmail, setEditEmail] = useState("");
-  const [editPhone, setEditPhone] = useState("");
-  const [editTeamMembers, setEditTeamMembers] = useState([]);
-
-
-  const handleEditThirdParty = (thirdParty) => {
-    setSelectedThirdPartyId(thirdParty.id);
-    setEditName(thirdParty.name);
-    setEditType(thirdParty.type);
-    setEditAddress(thirdParty.address);
-    setEditEmail(thirdParty.email);
-    setEditPhone(thirdParty.phone);
-    setEditTeamMembers(thirdParty.teamMembers);
-    setEditDialogOpen(true);
-  };
-
-  const handleDeleteThirdParty = (thirdPartyId) => {
-    // Implement logic to delete third party with Firestore operation
-    // Update the state after successful deletion
-  };
-
-  const handleSaveEditedThirdParty = async () => {
-    // Implement logic to update third party data in Firestore
-    // Update the state and close the dialog after successful update
-  };
-
-
-const StyledTableCell = styled(TableCell)(({ theme }) => ({
+const StyledTableCell = styled(TableCell)(() => ({
   [`&.${tableCellClasses.head}`]: {
     color: "white",
+    fontWeight: 800,
   },
 }));
 
-  return (
-    <div>
-      {/* ... search field */}
-      <TableContainer
-      className="table---"
-        component={Paper}
-        // style={{ backgroundColor: theme.palette.text.main }}
-      >
-        <Table sx={{ minWidth: 650 }} aria-label="simple table">
-          <TableHead>
-            <TableRow
-              sx={{
-                background: theme.palette.primary.main,
-              }}
-            >
-              <StyledTableCell>Name</StyledTableCell>
-              {/* <StyledTableCell>Type</StyledTableCell> */}
-              <StyledTableCell>Address</StyledTableCell>
-              <StyledTableCell>Email</StyledTableCell>
-              <StyledTableCell>Phone</StyledTableCell>
-              <StyledTableCell>Team Members</StyledTableCell>
-              <StyledTableCell>Actions</StyledTableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody sx={{ borderColor: theme.palette.primary.main, borderWidth: "2px", borderStyle: "solid" }}>
-            {thirdParties.map((thirdParty) => (
-              <TableRow key={thirdParty.id}>
-                <TableCell>{thirdParty?.name}</TableCell>
-                {/* <TableCell>{thirdParty?.type}</TableCell> */}
-                <TableCell>{thirdParty?.address}</TableCell>
-                <TableCell>{thirdParty?.email}</TableCell>
-                <TableCell>{thirdParty?.phone}</TableCell>
-                <TableCell>{thirdParty?.teamMembers?.join(", ")}</TableCell>
-                <TableCell>
-                  <IconButton onClick={() => handleEditThirdParty(thirdParty)}>
-                    {/* Edit icon */}
-                  </IconButton>
-                  <IconButton
-                    onClick={() => handleDeleteThirdParty(thirdParty.id)}
-                  >
-                    <DeleteOutlineRounded />
-                  </IconButton>
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </TableContainer>
+const isActiveRecord = (record) =>
+  record?.active !== false && !record?.archivedAt;
 
-      {/* ... Edit Third Party Dialog (similar to Add Third Party Dialog) */}
-    </div>
+const getCredentialState = (record) => {
+  if (!record?.authUid) {
+    return {
+      label: "Login Pending",
+      color: "warning",
+      variant: "outlined",
+      hasLogin: false,
+      loginEnabled: false,
+    };
+  }
+
+  if (record?.loginAccess === false || record?.credentialsStatus === "disabled") {
+    return {
+      label: "Login Disabled",
+      color: "default",
+      variant: "outlined",
+      hasLogin: true,
+      loginEnabled: false,
+    };
+  }
+
+  return {
+    label: "Login Enabled",
+    color: "success",
+    variant: "filled",
+    hasLogin: true,
+    loginEnabled: true,
+  };
+};
+
+const ThirdpartyTable = ({
+  thirdParties,
+  kind = "hospital",
+  onEdit,
+  onArchive,
+  onRestore,
+  onCreateLogin,
+  onResetPassword,
+  onToggleLogin,
+}) => {
+  const theme = useTheme();
+  const isHospital = kind === "hospital";
+
+  return (
+    <TableContainer component={Paper} elevation={0} sx={{ border: "1px solid", borderColor: "divider" }}>
+      <Table sx={{ minWidth: 780 }} aria-label={`${kind} table`}>
+        <TableHead>
+          <TableRow sx={{ background: theme.palette.primary.main }}>
+            <StyledTableCell>Name</StyledTableCell>
+            {isHospital ? <StyledTableCell>Address</StyledTableCell> : null}
+            <StyledTableCell>Email</StyledTableCell>
+            <StyledTableCell>Phone</StyledTableCell>
+            {isHospital ? <StyledTableCell>Team Members</StyledTableCell> : null}
+            <StyledTableCell>Status</StyledTableCell>
+            <StyledTableCell>Login</StyledTableCell>
+            <StyledTableCell align="right">Actions</StyledTableCell>
+          </TableRow>
+        </TableHead>
+        <TableBody>
+          {thirdParties.length === 0 ? (
+            <TableRow>
+              <TableCell colSpan={isHospital ? 8 : 6}>
+                <Box sx={{ py: 5, textAlign: "center" }}>
+                  <Typography variant="body2" color="text.secondary">
+                    No records found.
+                  </Typography>
+                </Box>
+              </TableCell>
+            </TableRow>
+          ) : (
+            thirdParties.map((thirdParty) => {
+              const active = isActiveRecord(thirdParty);
+              const credentialState = getCredentialState(thirdParty);
+
+              return (
+                <TableRow
+                  key={thirdParty.id}
+                  hover
+                  sx={{
+                    opacity: active ? 1 : 0.68,
+                    "&:last-child td": { borderBottom: 0 },
+                  }}
+                >
+                  <TableCell>
+                    <Typography variant="body2" fontWeight={800}>
+                      {thirdParty?.name || "-"}
+                    </Typography>
+                  </TableCell>
+                  {isHospital ? <TableCell>{thirdParty?.address || "-"}</TableCell> : null}
+                  <TableCell>{thirdParty?.email || "-"}</TableCell>
+                  <TableCell>{thirdParty?.phone || "-"}</TableCell>
+                  {isHospital ? (
+                    <TableCell>
+                      {Array.isArray(thirdParty?.teamMembers) && thirdParty.teamMembers.length > 0
+                        ? thirdParty.teamMembers.join(", ")
+                        : "-"}
+                    </TableCell>
+                  ) : null}
+                  <TableCell>
+                    <Chip
+                      size="small"
+                      label={active ? "Active" : "Archived"}
+                      color={active ? "success" : "default"}
+                      variant={active ? "filled" : "outlined"}
+                    />
+                  </TableCell>
+                  <TableCell>
+                    <Stack spacing={0.5} alignItems="flex-start">
+                      <Chip
+                        size="small"
+                        label={credentialState.label}
+                        color={credentialState.color}
+                        variant={credentialState.variant}
+                      />
+                      {thirdParty?.createdFrom === "booking" && !credentialState.hasLogin ? (
+                        <Typography variant="caption" color="text.secondary">
+                          Added from booking
+                        </Typography>
+                      ) : null}
+                    </Stack>
+                  </TableCell>
+                  <TableCell align="right">
+                    <Stack direction="row" spacing={0.5} justifyContent="flex-end">
+                      {active && !credentialState.hasLogin ? (
+                        <Tooltip title="Create login">
+                          <IconButton size="small" onClick={() => onCreateLogin?.(thirdParty)}>
+                            <KeyOutlined fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                      ) : null}
+                      {active && credentialState.hasLogin ? (
+                        <Tooltip title="Reset password">
+                          <IconButton size="small" onClick={() => onResetPassword?.(thirdParty)}>
+                            <LockResetOutlined fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                      ) : null}
+                      {active && credentialState.hasLogin ? (
+                        <Tooltip title={credentialState.loginEnabled ? "Disable login" : "Enable login"}>
+                          <IconButton
+                            size="small"
+                            onClick={() => onToggleLogin?.(thirdParty, !credentialState.loginEnabled)}
+                          >
+                            {credentialState.loginEnabled ? (
+                              <BlockOutlined fontSize="small" />
+                            ) : (
+                              <LockOpenOutlined fontSize="small" />
+                            )}
+                          </IconButton>
+                        </Tooltip>
+                      ) : null}
+                      <Tooltip title="Edit">
+                        <IconButton size="small" onClick={() => onEdit?.(thirdParty)}>
+                          <EditOutlined fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                      {active ? (
+                        <Tooltip title="Archive">
+                          <IconButton size="small" onClick={() => onArchive?.(thirdParty)}>
+                            <ArchiveOutlined fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                      ) : (
+                        <Tooltip title="Restore">
+                          <IconButton size="small" onClick={() => onRestore?.(thirdParty)}>
+                            <RestoreOutlined fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                      )}
+                    </Stack>
+                  </TableCell>
+                </TableRow>
+              );
+            })
+          )}
+        </TableBody>
+      </Table>
+    </TableContainer>
   );
 };
 

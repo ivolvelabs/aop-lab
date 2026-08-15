@@ -1,12 +1,10 @@
 import '@mdxeditor/editor/style.css'
 import {
   MDXEditor,
-  UndoRedo,
   BoldItalicUnderlineToggles,
   toolbarPlugin,
   headingsPlugin,
   BlockTypeSelect,
-  markdown$,
 } from "@mdxeditor/editor";
 import "./Editor.css"
 import { useState } from 'react';
@@ -18,11 +16,15 @@ function Editor({ handleSave }) {
   //     setValue(event.target.markdown);
   // };
 
-  console.log(value);
   return (
     <MDXEditor
       contentEditableClassName="editor"
-      onChange={() => setValue(markdown$)}
+      onChange={(nextValue) => {
+        setValue(nextValue);
+        if (handleSave) {
+          handleSave(nextValue);
+        }
+      }}
       markdown="Write Here...."
       plugins={[
         toolbarPlugin({

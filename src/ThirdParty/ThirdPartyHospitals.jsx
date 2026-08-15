@@ -1,307 +1,497 @@
-import React, { useState, useEffect } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
-  CircularProgress,
+  Alert,
   Button,
+  CircularProgress,
   Dialog,
-  DialogTitle,
-  DialogContent,
   DialogActions,
-  TextField,
+  DialogContent,
+  DialogTitle,
   FormControlLabel,
-  RadioGroup,
-  Radio,
   InputAdornment,
+  Snackbar,
+  Stack,
+  Switch,
+  TextField,
 } from "@mui/material";
-import { collection, addDoc, getDocs, onSnapshot, where, query } from "firebase/firestore";
-import { db } from "../firebase"; // Assuming your Firestore instance is imported here
-import ThirdpartyTable from "./ThirdpartyTable";
+import {
+  collection,
+  doc,
+  onSnapshot,
+  query,
+  serverTimestamp,
+  updateDoc,
+  where,
+} from "firebase/firestore";
 import { Search } from "@mui/icons-material";
 import { getFunctions, httpsCallable } from "firebase/functions";
+import { db } from "../firebase";
+import ThirdpartyTable from "./ThirdpartyTable";
 
+const emptyForm = {
+  name: "",
+  address: "",
+  email: "",
+  password: "",
+  phone: "",
+  teamMembers: "",
+};
+
+const emptyCredentialForm = {
+  email: "",
+  password: "",
+};
+
+const isActiveRecord = (record) =>
+  record?.active !== false && !record?.archivedAt;
+
+const normalizeSearch = (value) => String(value || "").toLowerCase().trim();
+
+const parseTeamMembers = (value) =>
+  value
+    .split(",")
+    .map((name) => name.trim())
+    .filter(Boolean);
 
 const ThirdPartyHospitals = () => {
   const functions = getFunctions();
   const createThirdParty = httpsCallable(functions, "createThirdParty");
+  const attachThirdPartyLogin = httpsCallable(functions, "attachThirdPartyLogin");
+  const resetThirdPartyPassword = httpsCallable(functions, "resetThirdPartyPassword");
+  const setThirdPartyLoginAccess = httpsCallable(functions, "setThirdPartyLoginAccess");
 
   const [thirdParties, setThirdParties] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [addThirdPartyDialogOpen, setAddThirdPartyDialogOpen] = useState(false);
-  const [name, setName] = useState("");
-  const [type, setType] = useState("hospital");
-  const [address, setAddress] = useState("");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [phone, setPhone] = useState("");
-  const [teamMembers, setTeamMembers] = useState([]); // Array of names
+  const [saving, setSaving] = useState(false);
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [selectedHospital, setSelectedHospital] = useState(null);
+  const [form, setForm] = useState(emptyForm);
   const [searchTerm, setSearchTerm] = useState("");
-
-
-  const handleSearch = (event) => {
-    setSearchTerm(event.target.value.toLowerCase());
-  };
-
-  const handleOpenAddThirdPartyDialog = () => {
-    setAddThirdPartyDialogOpen(true);
-  };
-
-  const handleCloseAddThirdPartyDialog = () => {
-    setAddThirdPartyDialogOpen(false);
-    setName("");
-    setType("");
-    setAddress("");
-    setEmail("");
-    setPassword("");
-    setPhone("");
-    setTeamMembers([]);
-  };
-
-  const handleSaveThirdParty = async () => {
-    try {
-      setLoading(true);
-      const thirdPartyData = {
-        name,
-        type: "hospital",
-        address,
-        email,
-        phone,
-        teamMembers,
-        role: "thirdparty",
-      };
-      // await addDoc(collection(db, "thirdparty"), thirdPartyData);
-      createThirdParty({ email, password, name, role: "thirdparty", type, address, phone, teamMembers })
-        .then((result) => {
-          console.log("User created:", result.data);
-          // handleCloseAddThirdPartyDialog();
-        })
-        .catch((error) => {
-          console.error("Error creating user:", error);
-        });
-      setThirdParties((prevThirdParties) => [
-        ...prevThirdParties,
-        thirdPartyData,
-      ]); // Update table
-      handleCloseAddThirdPartyDialog();
-    } catch (error) {
-      console.error("Error adding third party:", error);
-    }
-    setLoading(false);
-  };
-
-  const handleChange = (event) => {
-    setType(event.target.value);
-  };
+  const [showArchived, setShowArchived] = useState(false);
+  const [feedback, setFeedback] = useState(null);
+  const [credentialDialogOpen, setCredentialDialogOpen] = useState(false);
+  const [credentialMode, setCredentialMode] = useState("create");
+  const [credentialTarget, setCredentialTarget] = useState(null);
+  const [credentialForm, setCredentialForm] = useState(emptyCredentialForm);
 
   useEffect(() => {
     const q = query(
       collection(db, "thirdparty"),
       where("type", "==", "hospital")
     );
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const filteredThirdParties = snapshot.docs.filter((doc) => {
-        const data = doc.data();
-        return (
-          data.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          // data.type.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          data.address.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          data.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          data.phone.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          data.teamMembers.some((member) =>
-            member.toLowerCase().includes(searchTerm.toLowerCase())
-          )
-        );
-      });
-      setThirdParties(
-        filteredThirdParties.map((doc) => ({ ...doc.data(), id: doc.id }))
-      );
 
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      setThirdParties(snapshot.docs.map((item) => ({ ...item.data(), id: item.id })));
       setLoading(false);
     });
 
     return () => unsubscribe();
-  }, [searchTerm]);
+  }, []);
+
+  const filteredThirdParties = useMemo(() => {
+    const term = normalizeSearch(searchTerm);
+
+    return thirdParties.filter((thirdParty) => {
+      const active = isActiveRecord(thirdParty);
+      if (!showArchived && !active) return false;
+      if (!term) return true;
+
+      return [
+        thirdParty.name,
+        thirdParty.address,
+        thirdParty.email,
+        thirdParty.phone,
+        ...(Array.isArray(thirdParty.teamMembers) ? thirdParty.teamMembers : []),
+      ]
+        .map(normalizeSearch)
+        .some((value) => value.includes(term));
+    });
+  }, [thirdParties, searchTerm, showArchived]);
+
+  const updateForm = (field) => (event) => {
+    setForm((current) => ({ ...current, [field]: event.target.value }));
+  };
+
+  const openCreateDialog = () => {
+    setSelectedHospital(null);
+    setForm(emptyForm);
+    setDialogOpen(true);
+  };
+
+  const openEditDialog = (hospital) => {
+    setSelectedHospital(hospital);
+    setForm({
+      name: hospital?.name || "",
+      address: hospital?.address || "",
+      email: hospital?.email || "",
+      password: "",
+      phone: hospital?.phone || "",
+      teamMembers: Array.isArray(hospital?.teamMembers)
+        ? hospital.teamMembers.join(", ")
+        : "",
+    });
+    setDialogOpen(true);
+  };
+
+  const closeDialog = () => {
+    setDialogOpen(false);
+    setSelectedHospital(null);
+    setForm(emptyForm);
+  };
+
+  const openCredentialDialog = (hospital, mode) => {
+    setCredentialTarget(hospital);
+    setCredentialMode(mode);
+    setCredentialForm({
+      email: hospital?.email || "",
+      password: "",
+    });
+    setCredentialDialogOpen(true);
+  };
+
+  const closeCredentialDialog = () => {
+    setCredentialDialogOpen(false);
+    setCredentialTarget(null);
+    setCredentialForm(emptyCredentialForm);
+  };
+
+  const updateCredentialForm = (field) => (event) => {
+    setCredentialForm((current) => ({
+      ...current,
+      [field]: event.target.value,
+    }));
+  };
+
+  const saveHospital = async () => {
+    const teamMembers = parseTeamMembers(form.teamMembers);
+
+    try {
+      setSaving(true);
+
+      if (selectedHospital) {
+        await updateDoc(doc(db, "thirdparty", selectedHospital.id), {
+          name: form.name.trim(),
+          address: form.address.trim(),
+          phone: form.phone.trim(),
+          teamMembers,
+          updatedAt: serverTimestamp(),
+        });
+        setFeedback({ severity: "success", message: "Hospital/clinic updated." });
+      } else {
+        await createThirdParty({
+          name: form.name.trim(),
+          email: form.email.trim(),
+          password: form.password,
+          role: "thirdparty",
+          type: "hospital",
+          address: form.address.trim(),
+          phone: form.phone.trim(),
+          teamMembers,
+        });
+        setFeedback({
+          severity: "success",
+          message: "Hospital/clinic login account created.",
+        });
+      }
+
+      closeDialog();
+    } catch (error) {
+      console.error("Error saving third party:", error);
+      setFeedback({
+        severity: "error",
+        message: error?.message || "Hospital/clinic could not be saved.",
+      });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const archiveHospital = async (hospital) => {
+    try {
+      if (hospital.authUid && hospital.loginAccess !== false) {
+        await setThirdPartyLoginAccess({
+          thirdPartyId: hospital.id,
+          loginAccess: false,
+        });
+      }
+      await updateDoc(doc(db, "thirdparty", hospital.id), {
+        active: false,
+        archivedAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+      setFeedback({ severity: "success", message: "Hospital/clinic archived." });
+    } catch (error) {
+      console.error("Error archiving third party:", error);
+      setFeedback({
+        severity: "error",
+        message: "Hospital/clinic could not be archived.",
+      });
+    }
+  };
+
+  const saveCredentials = async () => {
+    if (!credentialTarget?.id) return;
+
+    try {
+      setSaving(true);
+
+      if (credentialMode === "create") {
+        await attachThirdPartyLogin({
+          thirdPartyId: credentialTarget.id,
+          email: credentialForm.email.trim(),
+          password: credentialForm.password,
+        });
+        setFeedback({ severity: "success", message: "Hospital/clinic login created." });
+      } else {
+        await resetThirdPartyPassword({
+          thirdPartyId: credentialTarget.id,
+          password: credentialForm.password,
+        });
+        setFeedback({ severity: "success", message: "Hospital/clinic password reset." });
+      }
+
+      closeCredentialDialog();
+    } catch (error) {
+      console.error("Error saving hospital credentials:", error);
+      setFeedback({
+        severity: "error",
+        message: error?.message || "Hospital/clinic credentials could not be saved.",
+      });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const toggleHospitalLogin = async (hospital, loginAccess) => {
+    try {
+      setSaving(true);
+      await setThirdPartyLoginAccess({
+        thirdPartyId: hospital.id,
+        loginAccess,
+      });
+      setFeedback({
+        severity: "success",
+        message: loginAccess
+          ? "Hospital/clinic login enabled."
+          : "Hospital/clinic login disabled.",
+      });
+    } catch (error) {
+      console.error("Error updating hospital login access:", error);
+      setFeedback({
+        severity: "error",
+        message: error?.message || "Hospital/clinic login access could not be updated.",
+      });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const restoreHospital = async (hospital) => {
+    try {
+      await updateDoc(doc(db, "thirdparty", hospital.id), {
+        active: true,
+        archivedAt: null,
+        updatedAt: serverTimestamp(),
+      });
+      setFeedback({ severity: "success", message: "Hospital/clinic restored." });
+    } catch (error) {
+      console.error("Error restoring third party:", error);
+      setFeedback({
+        severity: "error",
+        message: "Hospital/clinic could not be restored.",
+      });
+    }
+  };
+
+  const isEdit = Boolean(selectedHospital);
+  const canSave =
+    form.name.trim() !== "" &&
+    (isEdit || (form.email.trim() !== "" && form.password.trim() !== ""));
 
   return (
     <div>
-      <div
-        style={{
-          // width: "100%",
-          display: "flex",
-          flexDirection: "row",
-          alignItems: "center",
-        }}
+      <Stack
+        direction={{ xs: "column", md: "row" }}
+        spacing={2}
+        alignItems={{ xs: "stretch", md: "center" }}
+        sx={{ my: 2 }}
       >
-        <div
-          style={{
-            display: "flex",
-            width: "100%",
-            flexDirection: "row",
-            justifyContent: "center",
-            alignItems: "center",
-            margin: "10px",
+        <TextField
+          value={searchTerm}
+          onChange={(event) => setSearchTerm(event.target.value)}
+          label="Search hospitals"
+          type="search"
+          fullWidth
+          size="small"
+          InputProps={{
+            startAdornment: (
+              <InputAdornment position="start">
+                <Search />
+              </InputAdornment>
+            ),
           }}
-        >
-          <div
-            style={{
-              display: "flex",
-              flex: 1,
-              alignItems: "center",
-              justifyContent: "center",
-            }}
-          >
-            <TextField
-              value={searchTerm}
-              onChange={handleSearch}
-              label="Search"
-              type="search"
-              fullWidth
-              size="small"
-              InputProps={{
-                startAdornment: (
-                  <InputAdornment position="start">
-                    <Search />
-                  </InputAdornment>
-                ),
-              }}
-              sx={{ margin: "10px 0px" }}
+        />
+        <FormControlLabel
+          control={
+            <Switch
+              checked={showArchived}
+              onChange={(event) => setShowArchived(event.target.checked)}
             />
-          </div>
-          <div
-            style={{
-              display: "flex",
-              flex: 1,
-              alignItems: "center",
-              justifyContent: "end",
-            }}
-          >
-            <Button
-              type="submit"
-              variant="contained"
-              color="primary"
-              disabled={loading}
-              onClick={() => handleOpenAddThirdPartyDialog()}
-            >
-              {loading ? <CircularProgress size={24} /> : "Add Hospital/Clinic"}
-            </Button>
-          </div>
-        </div>
-      </div>
-
-      {/* ... Add Third Party Dialog (similar to UserTable) */}
-      <Dialog
-        open={addThirdPartyDialogOpen}
-        onClose={handleCloseAddThirdPartyDialog}
-        // style={{ width: "50vw" }}
-      >
-        <DialogTitle>Add Hospital/Clinic</DialogTitle>
-        <DialogContent
-          style={{
-            display: "flex",
-            flexDirection: "column",
-            paddingTop: "10px",
-            alignItems: "center",
-            width: "50vw",
-            maxWidth: "600px",
-          }}
+          }
+          label="Show archived"
+          sx={{ whiteSpace: "nowrap" }}
+        />
+        <Button
+          variant="contained"
+          disabled={loading}
+          onClick={openCreateDialog}
+          sx={{ minWidth: 190 }}
         >
+          {loading ? <CircularProgress size={24} color="inherit" /> : "Add Hospital/Clinic"}
+        </Button>
+      </Stack>
+
+      {loading ? (
+        <CircularProgress size={54} />
+      ) : (
+        <ThirdpartyTable
+          kind="hospital"
+          thirdParties={filteredThirdParties}
+          onEdit={openEditDialog}
+          onArchive={archiveHospital}
+          onRestore={restoreHospital}
+          onCreateLogin={(hospital) => openCredentialDialog(hospital, "create")}
+          onResetPassword={(hospital) => openCredentialDialog(hospital, "reset")}
+          onToggleLogin={toggleHospitalLogin}
+        />
+      )}
+
+      <Dialog open={dialogOpen} onClose={closeDialog} fullWidth maxWidth="sm">
+        <DialogTitle>{isEdit ? "Edit Hospital/Clinic" : "Add Hospital/Clinic"}</DialogTitle>
+        <DialogContent sx={{ display: "flex", flexDirection: "column", gap: 2, pt: 1 }}>
           <TextField
-            error={name === ""}
-            style={{ marginBottom: "10px" }}
+            autoFocus
+            required
             label="Name"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
+            value={form.name}
+            onChange={updateForm("name")}
             fullWidth
           />
-          {/* <TextField
-            error={type === ""}
-            style={{ marginBottom: "10px" }}
-            label="Type"
-            value={type}
-            onChange={(e) => setType(e.target.value)}
-            fullWidth
-            helperText="hospital or doctor"
-          /> */}
-          {/* <RadioGroup
-            row
-            name="controlled-radio-buttons-group"
-            value={type}
-            onChange={handleChange}
-          >
-            <FormControlLabel
-              value="doctor"
-              control={<Radio />}
-              label="Doctor"
-            />
-            <FormControlLabel
-              value="hospital"
-              control={<Radio />}
-              label="Hospital"
-            />
-          </RadioGroup> */}
           <TextField
-            style={{ marginBottom: "10px" }}
             label="Address"
-            value={address}
+            value={form.address}
             multiline
             rows={2}
-            onChange={(e) => setAddress(e.target.value)}
+            onChange={updateForm("address")}
             fullWidth
           />
           <TextField
-            error={password === ""}
-            style={{ marginBottom: "10px" }}
+            required
             label="Email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
+            value={form.email}
+            onChange={updateForm("email")}
             type="email"
             fullWidth
+            disabled={isEdit}
+            helperText={isEdit ? "Login email cannot be changed here." : ""}
           />
+          {!isEdit ? (
+            <TextField
+              required
+              label="Password"
+              value={form.password}
+              onChange={updateForm("password")}
+              type="password"
+              fullWidth
+            />
+          ) : null}
           <TextField
-            error={password === ""}
-            style={{ marginBottom: "10px" }}
-            label="Password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            type="password"
-            fullWidth
-          />
-          <TextField
-            style={{ marginBottom: "10px" }}
             label="Phone"
-            type="number"
-            value={phone}
-            onChange={(e) => setPhone(e.target.value)}
+            value={form.phone}
+            onChange={updateForm("phone")}
             fullWidth
           />
           <TextField
-            style={{ marginBottom: "10px" }}
             label="Team Members (comma-separated)"
-            value={teamMembers.join(", ")}
-            onChange={(e) => {
-              setTeamMembers(
-                e.target.value.split(",").map((name) => name.trim())
-              );
-            }}
+            value={form.teamMembers}
+            onChange={updateForm("teamMembers")}
             fullWidth
           />
         </DialogContent>
         <DialogActions>
-          <Button onClick={handleCloseAddThirdPartyDialog}>Cancel</Button>
-          <Button
-            disabled={name.trim() === "" || email.trim() === ""}
-            onClick={handleSaveThirdParty}
-          >
-            {loading ? <CircularProgress size={24} /> : "Save"}
+          <Button onClick={closeDialog}>Cancel</Button>
+          <Button disabled={!canSave || saving} onClick={saveHospital}>
+            {saving ? <CircularProgress size={20} /> : "Save"}
           </Button>
         </DialogActions>
       </Dialog>
 
-      <div>
-        {!loading ? (
-          <ThirdpartyTable thirdParties={thirdParties} />
-        ) : (
-          <CircularProgress size={54} />
-        )}
-      </div>
+      <Dialog open={credentialDialogOpen} onClose={closeCredentialDialog} fullWidth maxWidth="sm">
+        <DialogTitle>
+          {credentialMode === "create"
+            ? "Create Hospital/Clinic Login"
+            : "Reset Hospital/Clinic Password"}
+        </DialogTitle>
+        <DialogContent sx={{ display: "flex", flexDirection: "column", gap: 2, pt: 1 }}>
+          <Alert severity={credentialMode === "create" ? "info" : "warning"}>
+            {credentialMode === "create"
+              ? `Create login access for ${credentialTarget?.name || "this hospital/clinic"}.`
+              : `Set a new password for ${credentialTarget?.name || "this hospital/clinic"}.`}
+          </Alert>
+          {credentialMode === "create" ? (
+            <TextField
+              autoFocus
+              required
+              label="Login Email"
+              value={credentialForm.email}
+              onChange={updateCredentialForm("email")}
+              type="email"
+              fullWidth
+            />
+          ) : null}
+          <TextField
+            autoFocus={credentialMode !== "create"}
+            required
+            label={credentialMode === "create" ? "Initial Password" : "New Password"}
+            value={credentialForm.password}
+            onChange={updateCredentialForm("password")}
+            type="password"
+            fullWidth
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={closeCredentialDialog}>Cancel</Button>
+          <Button
+            disabled={
+              saving ||
+              credentialForm.password.trim() === "" ||
+              (credentialMode === "create" && credentialForm.email.trim() === "")
+            }
+            onClick={saveCredentials}
+          >
+            {saving ? (
+              <CircularProgress size={20} />
+            ) : credentialMode === "create" ? (
+              "Create Login"
+            ) : (
+              "Reset Password"
+            )}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Snackbar
+        open={Boolean(feedback)}
+        autoHideDuration={3200}
+        onClose={() => setFeedback(null)}
+        anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
+      >
+        {feedback ? (
+          <Alert onClose={() => setFeedback(null)} severity={feedback.severity} sx={{ width: "100%" }}>
+            {feedback.message}
+          </Alert>
+        ) : null}
+      </Snackbar>
     </div>
   );
 };
